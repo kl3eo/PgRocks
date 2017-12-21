@@ -5037,7 +5037,9 @@ transform_string_values_scalar(void *state, char *token, JsonTokenType tokentype
 	else
 		appendStringInfoString(_state->strval, token);
 }
-
+/*
+PgRocks, E.Gurianov, A.Shevlakov, 2017.
+*/
 static Datum
 rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 {

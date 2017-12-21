@@ -2639,7 +2639,9 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 			break;
 	}
 }
-
+/*
+PgRocks, E.Gurianov, A.Shevlakov, 2017.
+*/
 static void
 _composite_to_csv(Datum composite, StringInfo result)
 {
