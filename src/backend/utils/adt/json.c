@@ -2706,7 +2706,8 @@ _composite_to_csv(Datum composite, StringInfo result)
 extern Datum
 row_to_json_rocks(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2716,7 +2717,7 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num);
 		
 	
 	gettimeofday(&tv, NULL);
@@ -2747,7 +2748,8 @@ row_to_json_rocks_sst(PG_FUNCTION_ARGS)
 extern Datum
 row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2757,7 +2759,7 @@ row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num);
 		
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
@@ -2786,7 +2788,8 @@ row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 extern Datum
 row_to_csv_rocks(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2796,7 +2799,7 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num);
 
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
@@ -2819,7 +2822,8 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 extern Datum
 rocks_destroy(PG_FUNCTION_ARGS)
 {
-	_rocksdb_destroy();
+	int db_num = PG_GETARG_INT32(0);
+	_rocksdb_destroy(db_num);
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 }
 

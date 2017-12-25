@@ -451,11 +451,9 @@ extern rocksdb_writeoptions_t *writeoptions;
 extern rocksdb_readoptions_t *readoptions;
 extern rocksdb_writebatch_t *writebatch;
 extern int writebatch_records;
-extern const char DBPath[];
-extern char *rocksdbpath;
 
-extern void _rocksdb_open();
+extern void _rocksdb_open(int db_num);
 extern void _rocksdb_close();
-extern void _rocksdb_destroy();
+extern void _rocksdb_destroy(int db_num);
 
 #endif							/* MISCADMIN_H */

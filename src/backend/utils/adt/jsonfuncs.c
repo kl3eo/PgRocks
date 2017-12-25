@@ -5043,8 +5043,6 @@ PgRocks, E.Gurianov, A.Shevlakov, 2017.
 static Datum
 rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 {
-	int json_arg_num = 0;
-	
 	JsValue		jsv = {0};
 	HeapTupleHeader rec = NULL;
 	Oid		tupType;
@@ -5057,21 +5055,15 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	
 	text	   *json;
 	
-	char *err;
+	int db_num;
+	char *err = NULL;
 	char *buf;
 	
 	char *returned_value;
-	
 	int64_t bigintkey;
-
 	size_t len;
 	int mylen;
 
-	err = NULL;
-
-
-	_rocksdb_open();
-	
 
 	if (!cache)
 		fcinfo->flinfo->fn_extra = cache =
@@ -5099,7 +5091,10 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	jsv.is_json = 1;
 
 
-	bigintkey = PG_GETARG_INT64(json_arg_num);
+	db_num = PG_GETARG_INT32(0);	
+	_rocksdb_open(db_num);
+	
+	bigintkey = PG_GETARG_INT64(1);	
 	returned_value = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &len, &err);
 	if (err != NULL) {
 		fprintf(stderr, "[rocksdb]: %s\n", err); 
@@ -5357,8 +5352,6 @@ _csv_populate_composite(CompositeIOData *io,
 static Datum
 rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 {
-	int json_arg_num = 0;
-	
 	HeapTupleHeader rec = NULL;
 	Oid		tupType;
 	int32		tupTypmod;
@@ -5367,16 +5360,13 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 
 	MemoryContext fnmcxt = fcinfo->flinfo->fn_mcxt;
 	PopulateRecordCache *cache = fcinfo->flinfo->fn_extra;
-	
+
+	int db_num;	
 	char *csvLine;
 	size_t csvLineLen;	
 	int64_t bigintkey;
 
 	char *err = NULL;
-
-	
-	_rocksdb_open();
-	
 
 	if (!cache)
 		fcinfo->flinfo->fn_extra = cache =
@@ -5401,8 +5391,10 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	tupType = tupdesc->tdtypeid;
 	tupTypmod = tupdesc->tdtypmod;
 	
-
-	bigintkey = PG_GETARG_INT64(json_arg_num);	
+	db_num = PG_GETARG_INT32(0);	
+	_rocksdb_open(db_num);
+	
+	bigintkey = PG_GETARG_INT64(1);	
 	csvLine = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &csvLineLen, &err);
 	if (err != NULL) {
 		ereport(ERROR,
@@ -5461,7 +5453,7 @@ rocks_csv_to_record2(PG_FUNCTION_ARGS)
 	char *err = NULL;
 	int csv_parser_pos = 0;
 
-	_rocksdb_open();
+	_rocksdb_open(0);
 
 	// get string from rocks
 	bigintkey = PG_GETARG_INT64(json_arg_num);	

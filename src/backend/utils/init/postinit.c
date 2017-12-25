@@ -62,32 +62,35 @@
 #include "utils/tqual.h"
 #include <assert.h>
 
+int rocksdb_num = -1;
 rocksdb_t *rocksdb = 0;
 rocksdb_options_t *rocksdb_options = 0;
 rocksdb_writeoptions_t *writeoptions = 0;
 rocksdb_readoptions_t *readoptions = 0;
 rocksdb_writebatch_t *writebatch = 0;
 int writebatch_records = 0;
-const char DBPath[] = "/tmp/rocksdb";
-char *rocksdbpath = (char *) DBPath;
+const char rocksdbpath[] = "/tmp/rocksdb";
 
 
-void _rocksdb_open()
+void _rocksdb_name(int db_num, char* name)
 {
-	ulong u1;
-	ulong u2;
-	struct timeval tv;
+	sprintf(name, "%s_%d", rocksdbpath, db_num);
+}
 
-	if (rocksdb) {
+void _rocksdb_open(int db_num)
+{
+	char name[128];
+	char *err = 0;
+	int cpus = -1;
+
+	if (rocksdb && rocksdb_num == db_num) {
 		return;
 	}
-
-
-	char *err = 0;
-	int cpus = sysconf(_SC_NPROCESSORS_ONLN);  // get # of online cores
+	_rocksdb_close();
 
 	rocksdb_options = rocksdb_options_create();
 
+	cpus = sysconf(_SC_NPROCESSORS_ONLN);  // get # of online cores
 	rocksdb_options_increase_parallelism(rocksdb_options, (int)(cpus));
 	rocksdb_options_optimize_level_style_compaction(rocksdb_options, 0);
 	rocksdb_options_set_create_if_missing(rocksdb_options, 1);
@@ -109,7 +112,9 @@ void _rocksdb_open()
 	
 	writebatch = rocksdb_writebatch_create();
 
-	rocksdb = rocksdb_open(rocksdb_options, rocksdbpath, &err);
+	rocksdb_num = db_num;
+	_rocksdb_name(db_num, name);
+	rocksdb = rocksdb_open(rocksdb_options, name, &err);
 	if (err != NULL) {
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),
@@ -142,15 +147,19 @@ void _rocksdb_close()
 	readoptions = 0;
 	rocksdb_options = 0;
 	rocksdb = 0;
+	rocksdb_num = -1;
 }
 
-void _rocksdb_destroy()
+void _rocksdb_destroy(int db_num)
 {
 	char *err = 0;
+	char name[128];
+
 	rocksdb_options_t* options = rocksdb_options_create();
 
 	_rocksdb_close();
-	rocksdb_destroy_db(options, rocksdbpath, &err);
+	_rocksdb_name(db_num, name);
+	rocksdb_destroy_db(options, name, &err);
 	rocksdb_options_destroy(options);
 
 	if (err != NULL) {
