@@ -2504,7 +2504,7 @@ json_typeof(PG_FUNCTION_ARGS)
 static void
 datum_to_csv(Datum val, bool is_null, StringInfo result,
 			  JsonTypeCategory tcategory, Oid outfuncoid,
-			  bool key_scalar)
+			  bool key_scalar, char sep, char sep_replace)
 {
 	char	   *outputstr;
 	text	   *jsontext;
@@ -2633,9 +2633,15 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 			pfree(jsontext);
 			break;
 		default:
-			outputstr = OidOutputFunctionCall(outfuncoid, val);
-			appendStringInfoString(result, outputstr);	//escape_json(result, outputstr);
-			pfree(outputstr);
+			{
+				char *i;
+				outputstr = OidOutputFunctionCall(outfuncoid, val);
+				for (i = outputstr; *i; ++i)
+					if (*i == sep)
+						*i = sep_replace;
+				appendStringInfoString(result, outputstr);	//escape_json(result, outputstr);
+				pfree(outputstr);
+			}
 			break;
 	}
 }
@@ -2652,10 +2658,8 @@ _composite_to_csv(Datum composite, StringInfo result)
 	HeapTupleData tmptup,
 			   *tuple;
 	int			i;
-	bool		needsep = false;
-	const char *sep;
-
-	sep = "\t";
+	const char  sep = '|';
+	const char  sep_replace = '!';
 
 	td = DatumGetHeapTupleHeader(composite);
 
@@ -2679,10 +2683,6 @@ _composite_to_csv(Datum composite, StringInfo result)
 		if (tupdesc->attrs[i]->attisdropped)
 			continue;
 
-		if (needsep)
-			appendStringInfoString(result, sep);
-		needsep = true;
-
 		val = heap_getattr(tuple, i + 1, tupdesc, &isnull);
 
 		if (isnull)
@@ -2694,7 +2694,10 @@ _composite_to_csv(Datum composite, StringInfo result)
 			json_categorize_type(tupdesc->attrs[i]->atttypid,
 								 &tcategory, &outfuncoid);
 
-		datum_to_csv(val, isnull, result, tcategory, outfuncoid, false);
+		datum_to_csv(val, isnull, result, tcategory, outfuncoid, false, sep, sep_replace);
+
+		// always put sep at the end to replace it by \0 later
+		appendStringInfoChar(result, sep);
 	}
 
 	ReleaseTupleDesc(tupdesc);

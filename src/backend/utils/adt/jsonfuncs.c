@@ -5152,49 +5152,57 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 static bool
 _csv_get_next_field(char* csvLine, int lineLen, int *parser_pos, JsValue *field)
 {
-	char sep = '\t';
+	char sep = '|';
 	char *token;
 	char *token_end;
 	
-	// it's end
+	// it's  the line end
 	if (*parser_pos == lineLen)
 		return false;
 	
 	token = &csvLine[*parser_pos];
 	token_end = token;
-	// find token end
+	
+	// looking for token end
 	while ((*parser_pos) < lineLen && *token_end != sep)
 	{
 		(*parser_pos) += 1;
 		token_end += 1;
 	}
 	
-	// move parser to the next token 
+	// to move parser to the next token 
 	if (*token_end == sep)
-		*parser_pos += 1;
+	{
+		*token_end = 0;  // to null-terminate line, so strcmp is working
+		*parser_pos += 1; 
+	}
 
 	field->is_json = 1;
 	field->val.json.str = token;
 	field->val.json.len = (int)(token_end - token);
 	field->val.json.type = JSON_TOKEN_STRING;
-	if (*token == '"')
+	if (*token == '"') // when it's a timestamp
 	{
 		// remove ""
-		field->val.json.str += 1;
-		field->val.json.len -= 2;
-		field->val.json.type = JSON_TOKEN_STRING;
-	} 			        	 
-	else if (*token >= '0' && *token <= '9') field->val.json.type = JSON_TOKEN_NUMBER;
-	else if (*token == '-')                  field->val.json.type = JSON_TOKEN_NUMBER;
-	else if (strcmp(token, "true")) 		 field->val.json.type = JSON_TOKEN_TRUE;
-	else if (strcmp(token, "false"))		 field->val.json.type = JSON_TOKEN_FALSE;
-	else if (strcmp(token, "null"))          field->val.json.type = JSON_TOKEN_NULL;
-	else
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				errmsg("invalid input syntax for type %s", "svn"),
-				errdetail("Token \"%s\" is invalid.", token)));
-
+		//field->val.json.str += 1;
+		//token_end -=1;
+		//*token_end = 0;  // to null-terminate line
+	}
+	else if (*token >= '0' && *token <= '9') { field->val.json.type = JSON_TOKEN_NUMBER; }
+	else if (*token == '-')                  { field->val.json.type = JSON_TOKEN_NUMBER; }
+	else if (0 == strcmp(token, "true")) 	 { field->val.json.type = JSON_TOKEN_TRUE; }
+	else if (0 == strcmp(token, "false"))	 { field->val.json.type = JSON_TOKEN_FALSE; }
+	else if (0 == strcmp(token, "null")) 
+	{
+		field->val.json.type = JSON_TOKEN_NULL;
+		field->val.json.str = 0;
+		field->val.json.len = 0;
+	}         
+	//else
+	//	ereport(ERROR,
+	//			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+	//			errmsg("invalid input syntax for type %s", "svn"),
+	//			errdetail("Token \"%s\" is invalid.", token)));
 	return true;
 }
 
@@ -5431,4 +5439,83 @@ extern Datum
 rocks_csv_to_record(PG_FUNCTION_ARGS)
 {
 	return rocks_csv_populate_record_worker(fcinfo);
+}
+
+extern Datum
+rocks_csv_to_record2(PG_FUNCTION_ARGS)
+{
+	int i;
+	char* iter;
+	char sep = '|';
+	int json_arg_num = 0;
+
+	int         ncolumns = 0;
+	Datum*		values;
+	bool*		nulls;
+	HeapTuple	tuple;
+	TupleDesc	tupleDesc;
+
+	char *csvLine;
+	size_t csvLineLen;	
+	int64_t bigintkey;
+	char *err = NULL;
+	int csv_parser_pos = 0;
+
+	_rocksdb_open();
+
+	// get string from rocks
+	bigintkey = PG_GETARG_INT64(json_arg_num);	
+	csvLine = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &csvLineLen, &err);
+	if (err != NULL) {
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb], get error: %s", err)));
+		assert(!err);	
+	}
+
+	// count amount of fileds
+	for (i = 0, iter = csvLine; i < csvLineLen; ++i, ++iter)
+		if (*iter == '|')
+			++ncolumns;
+	if (ncolumns == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb], ncolumns == 0. Wrong separator?")));
+
+	// Build a tuple descriptor for our result type
+	if (get_call_result_type(fcinfo, NULL, &tupleDesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+	tupleDesc = BlessTupleDesc(tupleDesc);
+	
+	values = (Datum *) palloc(ncolumns * sizeof(Datum));
+	nulls = (bool *) palloc(ncolumns * sizeof(bool));
+	MemSet(nulls, 0, ncolumns * sizeof(bool));
+
+	for (i = 0; i < ncolumns; ++i)
+	{
+		JsValue	 field = {0};
+		bool found;
+		found = _csv_get_next_field(csvLine, csvLineLen, &csv_parser_pos, &field);
+		if (!found || field.val.json.type == JSON_TOKEN_NULL)
+			values[i] = (Datum*)0;
+		else
+		{
+			char *str;
+			int len = field.val.json.len;
+
+			if (len == -1)
+				len = strlen(field.val.json.str);
+
+			str = palloc(len + 1 * sizeof(char));
+			memcpy(str, field.val.json.str, len);
+			str[len] = '\0';
+
+			values[i] = CStringGetDatum(str);
+		}
+	}
+
+	free(csvLine);
+
+	tuple = heap_form_tuple(tupleDesc, values, nulls);
+	PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
 }

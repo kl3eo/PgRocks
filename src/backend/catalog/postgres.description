@@ -1623,7 +1623,7 @@
 3153	pg_proc	0	map array to json
 3154	pg_proc	0	map array to json with optional pretty printing
 3155	pg_proc	0	map row to json
-8895	pg_proc	0	map row to json/svn rocks
+8897	pg_proc	0	map row to json/svn rocks
 8891	pg_proc	0	rocks destoy db
 8892	pg_proc	0	rocks close db
 3156	pg_proc	0	map row to json with optional pretty printing

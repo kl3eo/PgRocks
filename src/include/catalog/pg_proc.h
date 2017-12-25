@@ -4461,10 +4461,14 @@ DESCR("map array to json with optional pretty printing");
 DATA(insert OID = 3155 (  row_to_json	   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json _null_ _null_ _null_ ));
 DESCR("map row to json");
 
-DATA(insert OID = 8889 (  row_to_json_rocks	     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks _null_ _null_ _null_ ));
-DATA(insert OID = 8890 (  row_to_json_rocks_sst	 PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks_sst _null_ _null_ _null_ ));
-DATA(insert OID = 8893 (  row_to_json_rocks_batch PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks_batch _null_ _null_ _null_ ));
-DATA(insert OID = 8895 (  row_to_csv_rocks PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_csv_rocks _null_ _null_ _null_ ));
+DATA(insert OID = 8889 (  row_to_json_rocks	           PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks _null_ _null_ _null_ ));
+DATA(insert OID = 8890 (  row_to_json_rocks_sst	       PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks_sst _null_ _null_ _null_ ));
+DATA(insert OID = 8893 (  row_to_json_rocks_batch      PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_json_rocks_batch _null_ _null_ _null_ ));
+DATA(insert OID = 8895 (  row_to_csv_rocks             PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 114 "2249" _null_ _null_ _null_ _null_ _null_ row_to_csv_rocks _null_ _null_ _null_ ));
+DATA(insert OID = 8894 (  rocks_json_to_record		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 2249 "114" _null_ _null_ _null_ _null_ _null_ rocks_json_to_record _null_ _null_ _null_ ));
+DATA(insert OID = 8896 (  rocks_csv_to_record		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 2249 "114" _null_ _null_ _null_ _null_ _null_ rocks_csv_to_record _null_ _null_ _null_ ));
+DATA(insert OID = 8897 (  rocks_csv_to_record2		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 2249 "114" _null_ _null_ _null_ _null_ _null_ rocks_csv_to_record2 _null_ _null_ _null_ ));
+
 DESCR("map row to json/svn rocks");
 
 DATA(insert OID =  8891 (  rocks_destroy	     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 0 0 25 "" _null_ _null_ _null_ _null_ _null_ rocks_destroy _null_ _null_ _null_ ));

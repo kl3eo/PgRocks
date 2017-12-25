@@ -94,9 +94,10 @@ void _rocksdb_open()
   	
 	// add code
 	rocksdb_options_set_compression(rocksdb_options, 0);
-	rocksdb_options_set_write_buffer_size(rocksdb_options, 1024L * 1024);
-	rocksdb_options_set_max_write_buffer_number(rocksdb_options, 32);
-	rocksdb_options_set_max_open_files(rocksdb_options, 100);
+    rocksdb_options_set_write_buffer_size(rocksdb_options, 1024L * 1024); // 64MB
+    rocksdb_options_set_max_write_buffer_number(rocksdb_options, 32);
+    rocksdb_options_set_target_file_size_base(rocksdb_options, 67108864); // 64MB
+    rocksdb_options_set_max_open_files(rocksdb_options, 100);
 
 	writeoptions = rocksdb_writeoptions_create();
 
