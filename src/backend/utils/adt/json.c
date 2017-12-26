@@ -34,6 +34,7 @@
 #include "utils/syscache.h"
 #include <unistd.h>
 #include <assert.h>
+#include <inttypes.h>
 
 /*
  * The context of the parser is maintained by the recursive descent
@@ -2564,7 +2565,7 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 				char		buf[MAXDATELEN + 1];
 
 				date = DatumGetDateADT(val);
-				/* Same as date_out(), but forcing DateStyle */
+				// Same as date_out(), but forcing DateStyle
 				if (DATE_NOT_FINITE(date))
 					EncodeSpecialDate(date, buf);
 				else
@@ -2578,13 +2579,14 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 			break;
 		case JSONTYPE_TIMESTAMP:
 			{
+				/*
 				Timestamp	timestamp;
 				struct pg_tm tm;
 				fsec_t		fsec;
 				char		buf[MAXDATELEN + 1];
 
 				timestamp = DatumGetTimestamp(val);
-				/* Same as timestamp_out(), but forcing DateStyle */
+				// Same as timestamp_out(), but forcing DateStyle
 				if (TIMESTAMP_NOT_FINITE(timestamp))
 					EncodeSpecialTimestamp(timestamp, buf);
 				else if (timestamp2tm(timestamp, NULL, &tm, &fsec, NULL, NULL) == 0)
@@ -2594,10 +2596,14 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 							 errmsg("timestamp out of range")));
 				appendStringInfo(result, "\"%s\"", buf);
+				*/
+				Timestamp timestamp = DatumGetTimestamp(val);
+				appendStringInfo(result, "%"  PRId64, timestamp);
 			}
 			break;
 		case JSONTYPE_TIMESTAMPTZ:
 			{
+				/*
 				TimestampTz timestamp;
 				struct pg_tm tm;
 				int			tz;
@@ -2606,7 +2612,7 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 				char		buf[MAXDATELEN + 1];
 
 				timestamp = DatumGetTimestampTz(val);
-				/* Same as timestamptz_out(), but forcing DateStyle */
+				// Same as timestamptz_out(), but forcing DateStyle
 				if (TIMESTAMP_NOT_FINITE(timestamp))
 					EncodeSpecialTimestamp(timestamp, buf);
 				else if (timestamp2tm(timestamp, &tz, &tm, &fsec, &tzn, NULL) == 0)
@@ -2616,6 +2622,9 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 							 errmsg("timestamp out of range")));
 				appendStringInfo(result, "\"%s\"", buf);
+				*/
+				TimestampTz timestamp = DatumGetTimestampTz(val);
+				appendStringInfo(result, "%"  PRId64, timestamp);
 			}
 			break;
 		case JSONTYPE_JSON:

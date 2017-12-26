@@ -35,6 +35,7 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+#include "utils/timestamp.h"
 
 /* Operations available for setPath */
 #define JB_PATH_CREATE					0x0001
@@ -5201,6 +5202,100 @@ _csv_get_next_field(char* csvLine, int lineLen, int *parser_pos, JsValue *field)
 	return true;
 }
 
+static Datum
+_csv_pupulate_timestamp(JsValue *jsv, Oid typid)
+{	
+	int64 scanVal;
+	int	len = jsv->val.json.len;
+	char *str = jsv->val.json.str;
+
+	if (len < 0) { // null terminated string
+		len = strlen(str);
+	}
+	else if (str[len] != '\0') // do we need to make null terminated string?
+	{
+		str = palloc(len + 1 * sizeof(char));
+		memcpy(str, jsv->val.json.str, len);
+		str[len] = '\0';
+	}
+
+	scanint8(str, false, &scanVal);
+	if (str != jsv->val.json.str)
+		pfree(str);
+
+	if (typid == TIMESTAMPOID) {
+		return TimestampGetDatum((Timestamp)scanVal);
+	}
+	if (typid == TIMESTAMPTZOID) {
+		return TimestampTzGetDatum((TimestampTz)scanVal);
+	}
+	return (Datum)0;
+}
+
+/* recursively populate a record field or an array element from a json/jsonb value */
+static Datum
+_csv_populate_record_field(ColumnIOData *col,
+					  Oid typid,
+					  int32 typmod,
+					  const char *colname,
+					  MemoryContext mcxt,
+					  Datum defaultval,
+					  JsValue *jsv,
+					  bool *isnull)
+{
+	TypeCat		typcat;
+
+	check_stack_depth();
+
+	/* prepare column metadata cache for the given type */
+	if (col->typid != typid || col->typmod != typmod)
+		prepare_column_cache(col, typid, typmod, mcxt, jsv->is_json);
+
+	*isnull = JsValueIsNull(jsv);
+
+	typcat = col->typcat;
+
+	/* try to convert json string to a non-scalar type through input function */
+	if (JsValueIsString(jsv) &&
+		(typcat == TYPECAT_ARRAY || typcat == TYPECAT_COMPOSITE))
+		typcat = TYPECAT_SCALAR;
+
+	/* we must perform domain checks for NULLs */
+	if (*isnull && typcat != TYPECAT_DOMAIN)
+		return (Datum) 0;
+
+	// csv keep timestamp as int64
+	if (!(*isnull) && typcat == TYPECAT_SCALAR && (typid == TIMESTAMPOID || typid == TIMESTAMPTZOID))
+	{
+		return _csv_pupulate_timestamp(jsv, typid);	
+	}
+
+	switch (typcat)
+	{
+		case TYPECAT_SCALAR:
+			return populate_scalar(&col->scalar_io, typid, typmod, jsv);
+
+		case TYPECAT_ARRAY:
+			return populate_array(&col->io.array, colname, mcxt, jsv);
+
+		case TYPECAT_COMPOSITE:
+			return populate_composite(&col->io.composite, typid, typmod,
+									  colname, mcxt,
+									  DatumGetPointer(defaultval)
+									  ? DatumGetHeapTupleHeader(defaultval)
+									  : NULL,
+									  jsv);
+
+		case TYPECAT_DOMAIN:
+			return populate_domain(&col->io.domain, typid, colname, mcxt,
+								   jsv, *isnull);
+
+		default:
+			elog(ERROR, "unrecognized type category '%c'", typcat);
+			return (Datum) 0;
+	}
+}
+
 /* populate a record tuple from csv value */
 static HeapTupleHeader
 _csv_populate_record(TupleDesc tupdesc,
@@ -5293,7 +5388,7 @@ _csv_populate_record(TupleDesc tupdesc,
 		if (defaultval && !found)
 			continue;
 
-		values[i] = populate_record_field(&record->columns[i],
+		values[i] = _csv_populate_record_field(&record->columns[i],
 										  att->atttypid,
 										  att->atttypmod,
 										  colname,
