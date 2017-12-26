@@ -1,0 +1,64 @@
+commit ae15c5220e084ec88db6f500e19f4df36d213aa8
+Author: Evgenii Gurianov <whats.eternal@gmail.com>
+Date:   Tue Dec 26 16:02:27 2017 +0300
+
+    add rocksdb_get2
+
+diff --git a/db/c.cc b/db/c.cc
+index b00f4a9..4c85950 100644
+--- a/db/c.cc
++++ b/db/c.cc
+@@ -817,6 +817,32 @@ char* rocksdb_get(
+   return result;
+ }
+ 
++// return the length of the value
++// if buflen is less then the value length
++// than nothing is copied
++
++size_t rocksdb_get2(
++    rocksdb_t* db,
++    const rocksdb_readoptions_t* options,
++    const char* key, size_t keylen,
++    char* buf, size_t buflen,
++    char** errptr) {
++  size_t vallen = 0;
++  std::string tmp;
++  Status s = db->rep->Get(options->rep, Slice(key, keylen), &tmp);
++  if (s.ok()) {
++    vallen = tmp.size();
++    if (buflen > vallen) {
++      memcpy(buf, tmp.data(), sizeof(char) * tmp.size());
++    }
++  } else {
++    if (!s.IsNotFound()) {
++      SaveError(errptr, s);
++    }
++  }
++  return vallen;
++}
++
+ char* rocksdb_get_cf(
+     rocksdb_t* db,
+     const rocksdb_readoptions_t* options,
+diff --git a/include/rocksdb/c.h b/include/rocksdb/c.h
+index b4ed9b4..474a6f4 100644
+--- a/include/rocksdb/c.h
++++ b/include/rocksdb/c.h
+@@ -262,6 +262,16 @@ extern ROCKSDB_LIBRARY_API char* rocksdb_get(
+     rocksdb_t* db, const rocksdb_readoptions_t* options, const char* key,
+     size_t keylen, size_t* vallen, char** errptr);
+ 
++/* Returns the length of the value
++   If buflen is less then the value length
++   than nothing is copied */
++extern ROCKSDB_LIBRARY_API size_t rocksdb_get2(
++    rocksdb_t* db,
++    const rocksdb_readoptions_t* options,
++    const char* key, size_t keylen,
++    char* buf, size_t buflen,
++    char** errptr);
++
+ extern ROCKSDB_LIBRARY_API char* rocksdb_get_cf(
+     rocksdb_t* db, const rocksdb_readoptions_t* options,
+     rocksdb_column_family_handle_t* column_family, const char* key,
