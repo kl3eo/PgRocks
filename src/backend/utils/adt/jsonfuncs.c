@@ -5186,9 +5186,9 @@ _csv_get_next_field(char* csvLine, int lineLen, int *parser_pos, JsValue *field)
 	}
 	else if (*token >= '0' && *token <= '9') { field->val.json.type = JSON_TOKEN_NUMBER; }
 	else if (*token == '-')                  { field->val.json.type = JSON_TOKEN_NUMBER; }
-	else if (0 == strcmp(token, "true")) 	 { field->val.json.type = JSON_TOKEN_TRUE; }
-	else if (0 == strcmp(token, "false"))	 { field->val.json.type = JSON_TOKEN_FALSE; }
-	else if (0 == strcmp(token, "null")) 
+	else if (*token == 't' && 0 == strcmp(token, "true")) 	 { field->val.json.type = JSON_TOKEN_TRUE; }
+	else if (*token == 'f' && 0 == strcmp(token, "false"))	 { field->val.json.type = JSON_TOKEN_FALSE; }
+	else if (*token == 'n' && 0 == strcmp(token, "null")) 
 	{
 		field->val.json.type = JSON_TOKEN_NULL;
 		field->val.json.str = 0;
