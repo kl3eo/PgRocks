@@ -5362,7 +5362,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	PopulateRecordCache *cache = fcinfo->flinfo->fn_extra;
 
 	int db_num;	
-	char *csvLine;
+	//char *csvLine;
 	size_t csvLineLen;	
 	int64_t bigintkey;
 
@@ -5395,22 +5395,35 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	_rocksdb_open(db_num);
 	
 	bigintkey = PG_GETARG_INT64(1);	
-	csvLine = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &csvLineLen, &err);
+	csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+								rocks_value_buf, rocks_value_buf_size, &err);
 	if (err != NULL) {
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),
 				errmsg("[rocksdb], get error: %s", err)));
 		assert(!err);	
 	}
+
+	// value won't be copied in the buffer if it's too big
+	if (csvLineLen >= rocks_value_buf_size) {
+		free(rocks_value_buf);
+		rocks_value_buf_size = csvLineLen + 128;
+		rocks_value_buf = (char*)malloc(rocks_value_buf_size);
+
+		csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+								rocks_value_buf, rocks_value_buf_size, &err);
+	}
+	
+
 	// wiki lies that line is null terminated
 	// but we cannot make it null terminated (if only make a copy)
 	//csvLine[csvLineLen] = '\0';
 
 	rettuple = _csv_populate_composite(&cache->io, tupType, tupTypmod,
-								  NULL, fnmcxt, rec, csvLine, csvLineLen);
+								  NULL, fnmcxt, rec, rocks_value_buf, csvLineLen);
 
 	
-	free(csvLine);
+	//free(csvLine);
 
 	if (tupdesc)
 	{

@@ -451,6 +451,8 @@ extern rocksdb_writeoptions_t *writeoptions;
 extern rocksdb_readoptions_t *readoptions;
 extern rocksdb_writebatch_t *writebatch;
 extern int writebatch_records;
+extern size_t rocks_value_buf_size;
+extern char * rocks_value_buf;
 
 extern void _rocksdb_open(int db_num);
 extern void _rocksdb_close();

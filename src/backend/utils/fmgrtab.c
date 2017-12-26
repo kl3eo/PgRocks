@@ -2771,7 +2771,7 @@ const FmgrBuiltin fmgr_builtins[] = {
   { 8894, "rocks_json_to_record", 2, true, false, rocks_json_to_record },
   { 8895, "row_to_csv_rocks", 2, true, false, row_to_csv_rocks },
   { 8896, "rocks_csv_to_record", 2, true, false, rocks_csv_to_record },
-  { 8897, "rocks_csv_to_record2", 2, true, false, rocks_csv_to_record2 },
+  { 8897, "rocks_csv_to_record2", 1, true, false, rocks_csv_to_record2 },
   /* dummy entry is easier than getting rid of comma after last real one */
   /* (not that there has ever been anything wrong with *having* a
      comma after the last field in an array initializer) */

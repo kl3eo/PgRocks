@@ -71,6 +71,10 @@ rocksdb_writebatch_t *writebatch = 0;
 int writebatch_records = 0;
 const char rocksdbpath[] = "/tmp/rocksdb";
 
+size_t rocks_value_buf_size = 0;
+char * rocks_value_buf = 0; // BTW, it's OK that it's never going to be freed
+
+
 
 void _rocksdb_name(int db_num, char* name)
 {
