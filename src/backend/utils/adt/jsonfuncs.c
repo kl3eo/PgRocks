@@ -5093,7 +5093,7 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 
 
 	db_num = PG_GETARG_INT32(0);	
-	_rocksdb_open(db_num);
+	_rocksdb_open(db_num, false);
 	
 	bigintkey = PG_GETARG_INT64(1);	
 	returned_value = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &len, &err);
@@ -5487,7 +5487,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	tupTypmod = tupdesc->tdtypmod;
 	
 	db_num = PG_GETARG_INT32(0);	
-	_rocksdb_open(db_num);
+	_rocksdb_open(db_num, false);
 	
 	bigintkey = PG_GETARG_INT64(1);	
 	csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
@@ -5496,10 +5496,13 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),
 				errmsg("[rocksdb], get error: %s", err)));
-		assert(!err);	
+	}
+	// record is not found, eventually this returns nulls
+	if (csvLineLen == -1) {
+		csvLineLen = 0;
 	}
 
-	// value won't be copied in the buffer if it's too big
+	// value won't be copied in the buffer if the buffer is too small
 	if (csvLineLen >= rocks_value_buf_size) {
 		free(rocks_value_buf);
 		rocks_value_buf_size = csvLineLen + 128;
@@ -5507,7 +5510,19 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 
 		csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
 								rocks_value_buf, rocks_value_buf_size, &err);
+								
+		if (err != NULL) {
+			ereport(ERROR,
+					(errcode(ERRCODE_NO_DATA),
+					errmsg("[rocksdb], get error: %s", err)));
+			assert(!err);
+		}
+		// record is not found, this returns nulls
+		if (csvLineLen == -1) {
+			csvLineLen = 0;
+		}
 	}
+
 	
 
 	// wiki lies that line is null terminated
@@ -5561,7 +5576,7 @@ rocks_csv_to_record2(PG_FUNCTION_ARGS)
 	char *err = NULL;
 	int csv_parser_pos = 0;
 
-	_rocksdb_open(0);
+	_rocksdb_open(0, false);
 
 	// get string from rocks
 	bigintkey = PG_GETARG_INT64(json_arg_num);	

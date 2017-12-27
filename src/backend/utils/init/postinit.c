@@ -72,7 +72,7 @@ int writebatch_records = 0;
 const char rocksdbpath[] = "/tmp/rocksdb";
 
 size_t rocks_value_buf_size = 0;
-char * rocks_value_buf = 0; // BTW, it's OK that it's never going to be freed
+char * rocks_value_buf = NULL; // BTW, it's OK that it's never going to be freed
 
 
 
@@ -81,7 +81,7 @@ void _rocksdb_name(int db_num, char* name)
 	sprintf(name, "%s_%d", rocksdbpath, db_num);
 }
 
-void _rocksdb_open(int db_num)
+void _rocksdb_open(int db_num, bool createIfMissing)
 {
 	char name[128];
 	char *err = 0;
@@ -90,6 +90,12 @@ void _rocksdb_open(int db_num)
 	if (rocksdb && rocksdb_num == db_num) {
 		return;
 	}
+
+	if (rocks_value_buf == NULL) {
+		rocks_value_buf_size = 512;
+		rocks_value_buf = (char*)malloc(rocks_value_buf_size);
+	}
+
 	_rocksdb_close();
 
 	rocksdb_options = rocksdb_options_create();
@@ -97,7 +103,7 @@ void _rocksdb_open(int db_num)
 	cpus = sysconf(_SC_NPROCESSORS_ONLN);  // get # of online cores
 	rocksdb_options_increase_parallelism(rocksdb_options, (int)(cpus));
 	rocksdb_options_optimize_level_style_compaction(rocksdb_options, 0);
-	rocksdb_options_set_create_if_missing(rocksdb_options, 1);
+	rocksdb_options_set_create_if_missing(rocksdb_options, createIfMissing ? 1 : 0);
   	
 	// add code
 	rocksdb_options_set_compression(rocksdb_options, 0);

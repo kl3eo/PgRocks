@@ -2726,7 +2726,7 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open(db_num);
+	_rocksdb_open(db_num, true);
 		
 	
 	gettimeofday(&tv, NULL);
@@ -2768,7 +2768,7 @@ row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open(db_num);
+	_rocksdb_open(db_num, true);
 		
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
@@ -2808,7 +2808,7 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open(db_num);
+	_rocksdb_open(db_num, true);
 
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
