@@ -33,6 +33,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/typcache.h"
+#include "utils/timestamp.h"
 
 /* semantic action functions for json_object_keys */
 static void okeys_object_field_start(void *state, char *fname, bool isnull);
@@ -3977,14 +3978,21 @@ setPathArray(JsonbIterator **it, Datum *path_elems, bool *path_nulls,
 			{
 				addJsonbToParseState(st, newval);
 			}
+
 		}
 	}
 }
 
+
+/*
+PgRocks, E.Gurianov, A.Shevlakov, 2017.
+*/
+
+
 /****************************************************************
  * 
  * 
- * PgRocks, E. Gurianov, A.Shevlakov, 2017.
+ * 
  * 
  * 
  ***************************************************************/
@@ -3992,7 +4000,6 @@ setPathArray(JsonbIterator **it, Datum *path_elems, bool *path_nulls,
 static Datum
 rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 {
-	int			json_arg_num = 0;
 	Oid			jtype = JSONOID;
 	text	   *json;
 	HTAB	   *json_hash = NULL;
@@ -4008,6 +4015,7 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	Datum	   *values;
 	bool	   *nulls;
 
+	int db_num;
 	char *err = NULL;
 	char *returned_value = NULL;
 	int64_t bigintkey;
@@ -4025,18 +4033,18 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 				errhint("Try calling the function in the FROM clause "
 						"using a column definition list.")));
 
-
-	_rocksdb_open();
+	
+	db_num = PG_GETARG_INT32(0);	
+	_rocksdb_open(db_num, false);
 
 	/* just get the text */
-	bigintkey = PG_GETARG_INT64(json_arg_num);
+	bigintkey = PG_GETARG_INT64(1);	
 	returned_value = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &len, &err);
 	if (err != NULL) {
-		ereport(ERROR,
-				(errcode(ERRCODE_NO_DATA),
-				errmsg("[rocksdb], get error: %s", err)));
+		fprintf(stderr, "[rocksdb]: %s\n", err); 
 		assert(!err);	
 	}
+
 	//fprintf(stderr, "[rocksdb]: json %s\n", returned_value);
 	//mylen = strchr(returned_value,'}') - returned_value + 1;
 	//buf = malloc(mylen+2);
@@ -4199,62 +4207,96 @@ typedef struct JsValue
 	}			val;
 } JsValue;
 
+static Datum
+_csv_pupulate_timestamp(JsValue *jsv, Oid typid)
+{	
+	int64 scanVal;
+	int	len = jsv->val.json.len;
+	char *str = jsv->val.json.str;
+
+	if (len < 0) { // null terminated string
+		len = strlen(str);
+	}
+	else if (str[len] != '\0') // do we need to make null terminated string?
+	{
+		str = palloc(len + 1 * sizeof(char));
+		memcpy(str, jsv->val.json.str, len);
+		str[len] = '\0';
+	}
+
+	scanint8(str, false, &scanVal);
+	if (str != jsv->val.json.str)
+		pfree(str);
+
+	if (typid == TIMESTAMPOID) {
+		return TimestampGetDatum((Timestamp)scanVal);
+	}
+	if (typid == TIMESTAMPTZOID) {
+		return TimestampTzGetDatum((TimestampTz)scanVal);
+	}
+	return (Datum)0;
+}
 
 static bool
 _csv_get_next_field(char* csvLine, int lineLen, int *parser_pos, JsValue *field)
 {
-	char sep = '\t';
+	char sep = '|';
 	char *token;
 	char *token_end;
 	
-	// it's end
+	// it's  the line end
 	if (*parser_pos == lineLen)
 		return false;
 	
 	token = &csvLine[*parser_pos];
 	token_end = token;
-	// find token end
+	
+	// looking for token end
 	while ((*parser_pos) < lineLen && *token_end != sep)
 	{
 		(*parser_pos) += 1;
 		token_end += 1;
 	}
 	
-	// move parser to the next token 
+	// to move parser to the next token 
 	if (*token_end == sep)
-		*parser_pos += 1;
+	{
+		*token_end = 0;  // to null-terminate line, so strcmp is working
+		*parser_pos += 1; 
+	}
 
 	field->is_json = 1;
 	field->val.json.str = token;
 	field->val.json.len = (int)(token_end - token);
 	field->val.json.type = JSON_TOKEN_STRING;
-	if (*token == '"')
+	if (*token == '"') // when it's a timestamp
 	{
 		// remove ""
-		field->val.json.str += 1;
-		field->val.json.len -= 2;
-		field->val.json.type = JSON_TOKEN_STRING;
-	} 			        	 
-	else if (*token >= '0' && *token <= '9') field->val.json.type = JSON_TOKEN_NUMBER;
-	else if (*token == '-')                  field->val.json.type = JSON_TOKEN_NUMBER;
-	else if (strcmp(token, "true")) 		 field->val.json.type = JSON_TOKEN_TRUE;
-	else if (strcmp(token, "false"))		 field->val.json.type = JSON_TOKEN_FALSE;
-	else if (strcmp(token, "null"))          field->val.json.type = JSON_TOKEN_NULL;
-	else
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				errmsg("invalid input syntax for type %s", "svn"),
-				errdetail("Token \"%s\" is invalid.", token)));
-
+		//field->val.json.str += 1;
+		//token_end -=1;
+		//*token_end = 0;  // to null-terminate line
+	}
+	else if (*token >= '0' && *token <= '9') { field->val.json.type = JSON_TOKEN_NUMBER; }
+	else if (*token == '-')                  { field->val.json.type = JSON_TOKEN_NUMBER; }
+	else if (*token == 't' && 0 == strcmp(token, "true")) 	 { field->val.json.type = JSON_TOKEN_TRUE; }
+	else if (*token == 'f' && 0 == strcmp(token, "false"))	 { field->val.json.type = JSON_TOKEN_FALSE; }
+	else if (*token == 'n' && 0 == strcmp(token, "null")) 
+	{
+		field->val.json.type = JSON_TOKEN_NULL;
+		field->val.json.str = 0;
+		field->val.json.len = 0;
+	}         
+	//else
+	//	ereport(ERROR,
+	//			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+	//			errmsg("invalid input syntax for type %s", "svn"),
+	//			errdetail("Token \"%s\" is invalid.", token)));
 	return true;
 }
-
-
 
 static Datum
 rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 {
-	int			json_arg_num = 0;
 	Oid			jtype = JSONOID;
 	HeapTupleHeader rec = NULL;
 	Oid			tupType = InvalidOid;
@@ -4268,6 +4310,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	Datum	   *values;
 	bool	   *nulls;
 
+	int db_num;
 	char *err = NULL;
 	int64_t bigintkey;
 	char *csvLine = NULL;	
@@ -4287,17 +4330,43 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 						"using a column definition list.")));
 
 
-	_rocksdb_open();
-
+	db_num = PG_GETARG_INT32(0);	
+	_rocksdb_open(db_num, false);
 	/* just get the text */
-	bigintkey = PG_GETARG_INT64(json_arg_num);
-	csvLine = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &csvLineLen, &err);
+	bigintkey = PG_GETARG_INT64(1);	
+	csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+								rocks_value_buf, rocks_value_buf_size, &err);
 	if (err != NULL) {
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),
 				errmsg("[rocksdb], get error: %s", err)));
-		assert(!err);	
 	}
+	// record is not found, eventually this returns nulls
+	if (csvLineLen == -1) {
+		csvLineLen = 0;
+	}
+
+	// value won't be copied in the buffer if the buffer is too small
+	if (csvLineLen >= rocks_value_buf_size) {
+		free(rocks_value_buf);
+		rocks_value_buf_size = csvLineLen + 128;
+		rocks_value_buf = (char*)malloc(rocks_value_buf_size);
+
+		csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+								rocks_value_buf, rocks_value_buf_size, &err);
+								
+		if (err != NULL) {
+			ereport(ERROR,
+					(errcode(ERRCODE_NO_DATA),
+					errmsg("[rocksdb], get error: %s", err)));
+			assert(!err);
+		}
+		// record is not found, this returns nulls
+		if (csvLineLen == -1) {
+			csvLineLen = 0;
+		}
+	}
+	csvLine = rocks_value_buf;
 
 	ncolumns = tupdesc->natts;
 
@@ -4333,7 +4402,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	{
 		ColumnIOData *column_info = &my_extra->columns[i];
 		Oid			column_type = tupdesc->attrs[i]->atttypid;
-		JsValue v = {0};
+		JsValue jsv = {0};
 		bool found;
 
 		/* Ignore dropped columns in datatype */
@@ -4343,7 +4412,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 			continue;
 		}
 
-		found = _csv_get_next_field(csvLine, csvLineLen, &csv_parser_pos, &v);
+		found = _csv_get_next_field(csvLine, csvLineLen, &csv_parser_pos, &jsv);
 
 		/*
 		 * Prepare to convert the column value from text
@@ -4357,7 +4426,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 						  fcinfo->flinfo->fn_mcxt);
 			column_info->column_type = column_type;
 		}
-		if (!found || v.val.json.type == JSON_TOKEN_NULL)
+		if (!found || jsv.val.json.type == JSON_TOKEN_NULL)
 		{
 			/*
 			 * need InputFunctionCall to happen even for nulls, so that domain
@@ -4370,11 +4439,20 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 		}
 		else
 		{
-			char *s = pnstrdup(v.val.json.str, v.val.json.len);
-			values[i] = InputFunctionCall(&column_info->proc, s,
+			if (column_info->column_type == TIMESTAMPOID 
+			|| column_info->column_type == TIMESTAMPTZOID)
+			{
+				values[i] = _csv_pupulate_timestamp(&jsv, column_info->column_type);	
+				nulls[i] = false;
+			}
+			else 
+			{
+				char *s = pnstrdup(jsv.val.json.str, jsv.val.json.len);
+				values[i] = InputFunctionCall(&column_info->proc, s,
 										  column_info->typioparam,
 										  tupdesc->attrs[i]->atttypmod);
-			nulls[i] = false;
+				nulls[i] = false;
+			}
 		}
 	}
 
@@ -4382,7 +4460,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 
 	ReleaseTupleDesc(tupdesc);
 
-	free(csvLine);
+	//free(csvLine);
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(rettuple));
 }

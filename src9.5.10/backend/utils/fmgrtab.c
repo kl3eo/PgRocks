@@ -5110,14 +5110,14 @@ const FmgrBuiltin fmgr_builtins[] = {
   { 6012, "pg_replication_origin_advance", 2, true, false, pg_replication_origin_advance },
   { 6013, "pg_replication_origin_progress", 2, true, false, pg_replication_origin_progress },
   { 6014, "pg_show_replication_origin_status", 0, false, true, pg_show_replication_origin_status },
-  { 8889, "row_to_json_rocks", 1, true, false, row_to_json_rocks },
-  { 8890, "row_to_json_rocks_sst", 1, true, false, row_to_json_rocks_sst },
-  { 8891, "rocks_destroy", 0, true, false, rocks_destroy },
+  { 8889, "row_to_json_rocks", 2, true, false, row_to_json_rocks },
+  { 8890, "row_to_json_rocks_sst", 2, true, false, row_to_json_rocks_sst },
+  { 8891, "rocks_destroy", 1, true, false, rocks_destroy },
   { 8892, "rocks_close", 0, true, false, rocks_close },
-  { 8893, "row_to_json_rocks_batch", 1, true, false, row_to_json_rocks_batch },
-  { 8894, "rocks_json_to_record", 1, true, false, rocks_json_to_record },
-  { 8895, "row_to_csv_rocks", 1, true, false, row_to_csv_rocks },
-  { 8896, "rocks_csv_to_record", 1, true, false, rocks_csv_to_record }, 
+  { 8893, "row_to_json_rocks_batch", 2, true, false, row_to_json_rocks_batch },
+  { 8894, "rocks_json_to_record", 2, true, false, rocks_json_to_record },
+  { 8895, "row_to_csv_rocks", 2, true, false, row_to_csv_rocks },
+  { 8896, "rocks_csv_to_record", 2, true, false, rocks_csv_to_record },
   /* dummy entry is easier than getting rid of comma after last real one */
   /* (not that there has ever been anything wrong with *having* a
      comma after the last field in an array initializer) */

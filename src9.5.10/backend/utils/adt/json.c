@@ -32,6 +32,7 @@
 #include "utils/jsonapi.h"
 #include "utils/typcache.h"
 #include "utils/syscache.h"
+#include <inttypes.h>
 
 /*
  * The context of the parser is maintained by the recursive descent
@@ -2485,9 +2486,13 @@ json_typeof(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(type));
 }
 
+/*
+PgRocks, E.Gurianov, A.Shevlakov, 2017.
+*/
+
 /*******************************************************
  * 
- * PgRocks, E.Gurianov, A.Shevlakov, 2017.
+ * 
  * 
  * 
  ******************************************************/
@@ -2504,7 +2509,7 @@ json_typeof(PG_FUNCTION_ARGS)
 static void
 datum_to_csv(Datum val, bool is_null, StringInfo result,
 			  JsonTypeCategory tcategory, Oid outfuncoid,
-			  bool key_scalar)
+			  bool key_scalar, char sep, char sep_replace)
 {
 	char	   *outputstr;
 	text	   *jsontext;
@@ -2564,7 +2569,7 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 				char		buf[MAXDATELEN + 1];
 
 				date = DatumGetDateADT(val);
-				/* Same as date_out(), but forcing DateStyle */
+				// Same as date_out(), but forcing DateStyle
 				if (DATE_NOT_FINITE(date))
 					EncodeSpecialDate(date, buf);
 				else
@@ -2578,13 +2583,14 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 			break;
 		case JSONTYPE_TIMESTAMP:
 			{
+				/*
 				Timestamp	timestamp;
 				struct pg_tm tm;
 				fsec_t		fsec;
 				char		buf[MAXDATELEN + 1];
 
 				timestamp = DatumGetTimestamp(val);
-				/* Same as timestamp_out(), but forcing DateStyle */
+				// Same as timestamp_out(), but forcing DateStyle
 				if (TIMESTAMP_NOT_FINITE(timestamp))
 					EncodeSpecialTimestamp(timestamp, buf);
 				else if (timestamp2tm(timestamp, NULL, &tm, &fsec, NULL, NULL) == 0)
@@ -2594,10 +2600,14 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 							 errmsg("timestamp out of range")));
 				appendStringInfo(result, "\"%s\"", buf);
+				*/
+				Timestamp timestamp = DatumGetTimestamp(val);
+				appendStringInfo(result, "%"  PRId64, timestamp);
 			}
 			break;
 		case JSONTYPE_TIMESTAMPTZ:
 			{
+				/*
 				TimestampTz timestamp;
 				struct pg_tm tm;
 				int			tz;
@@ -2606,7 +2616,7 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 				char		buf[MAXDATELEN + 1];
 
 				timestamp = DatumGetTimestampTz(val);
-				/* Same as timestamptz_out(), but forcing DateStyle */
+				// Same as timestamptz_out(), but forcing DateStyle
 				if (TIMESTAMP_NOT_FINITE(timestamp))
 					EncodeSpecialTimestamp(timestamp, buf);
 				else if (timestamp2tm(timestamp, &tz, &tm, &fsec, &tzn, NULL) == 0)
@@ -2616,6 +2626,9 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 							 errmsg("timestamp out of range")));
 				appendStringInfo(result, "\"%s\"", buf);
+				*/
+				TimestampTz timestamp = DatumGetTimestampTz(val);
+				appendStringInfo(result, "%"  PRId64, timestamp);
 			}
 			break;
 		case JSONTYPE_JSON:
@@ -2633,9 +2646,15 @@ datum_to_csv(Datum val, bool is_null, StringInfo result,
 			pfree(jsontext);
 			break;
 		default:
-			outputstr = OidOutputFunctionCall(outfuncoid, val);
-			appendStringInfoString(result, outputstr);	//escape_json(result, outputstr);
-			pfree(outputstr);
+			{
+				char *i;
+				outputstr = OidOutputFunctionCall(outfuncoid, val);
+				for (i = outputstr; *i; ++i)
+					if (*i == sep)
+						*i = sep_replace;
+				appendStringInfoString(result, outputstr);	//escape_json(result, outputstr);
+				pfree(outputstr);
+			}
 			break;
 	}
 }
@@ -2650,10 +2669,8 @@ _composite_to_csv(Datum composite, StringInfo result)
 	HeapTupleData tmptup,
 			   *tuple;
 	int			i;
-	bool		needsep = false;
-	const char *sep;
-
-	sep = "\t";
+	const char  sep = '|';
+	const char  sep_replace = '!';
 
 	td = DatumGetHeapTupleHeader(composite);
 
@@ -2677,10 +2694,6 @@ _composite_to_csv(Datum composite, StringInfo result)
 		if (tupdesc->attrs[i]->attisdropped)
 			continue;
 
-		if (needsep)
-			appendStringInfoString(result, sep);
-		needsep = true;
-
 		val = heap_getattr(tuple, i + 1, tupdesc, &isnull);
 
 		if (isnull)
@@ -2692,7 +2705,10 @@ _composite_to_csv(Datum composite, StringInfo result)
 			json_categorize_type(tupdesc->attrs[i]->atttypid,
 								 &tcategory, &outfuncoid);
 
-		datum_to_csv(val, isnull, result, tcategory, outfuncoid, false);
+		datum_to_csv(val, isnull, result, tcategory, outfuncoid, false, sep, sep_replace);
+
+		// always put sep at the end to replace it by \0 later
+		appendStringInfoChar(result, sep);
 	}
 
 	ReleaseTupleDesc(tupdesc);
@@ -2701,7 +2717,8 @@ _composite_to_csv(Datum composite, StringInfo result)
 extern Datum
 row_to_json_rocks(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2711,7 +2728,7 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num, true);
 		
 	
 	gettimeofday(&tv, NULL);
@@ -2742,7 +2759,8 @@ row_to_json_rocks_sst(PG_FUNCTION_ARGS)
 extern Datum
 row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2752,7 +2770,7 @@ row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num, true);
 		
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
@@ -2781,7 +2799,8 @@ row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 extern Datum
 row_to_csv_rocks(PG_FUNCTION_ARGS)
 {
-	Datum		array = PG_GETARG_DATUM(0);
+	int         db_num = PG_GETARG_INT32(0);
+	Datum		array = PG_GETARG_DATUM(1);
 	StringInfo	result;
 
 	struct timeval tv;
@@ -2791,7 +2810,7 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 
 	char *err = NULL;
 
-	_rocksdb_open();
+	_rocksdb_open(db_num, true);
 
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
@@ -2814,7 +2833,8 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 extern Datum
 rocks_destroy(PG_FUNCTION_ARGS)
 {
-	_rocksdb_destroy();
+	int db_num = PG_GETARG_INT32(0);
+	_rocksdb_destroy(db_num);
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 }
 

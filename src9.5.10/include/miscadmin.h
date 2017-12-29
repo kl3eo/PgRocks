@@ -28,7 +28,6 @@
 #include "pgtime.h"				/* for pg_time_t */
 #include "rocksdb/c.h"
 
-
 #define PG_BACKEND_VERSIONSTR "postgres (PostgreSQL) " PG_VERSION "\n"
 
 #define InvalidPid				(-1)
@@ -476,11 +475,11 @@ extern rocksdb_writeoptions_t *writeoptions;
 extern rocksdb_readoptions_t *readoptions;
 extern rocksdb_writebatch_t *writebatch;
 extern int writebatch_records;
-extern const char DBPath[];
-extern char *rocksdbpath;
+extern size_t rocks_value_buf_size;
+extern char * rocks_value_buf;
 
-extern void _rocksdb_open();
+extern void _rocksdb_open(int db_num, bool createIfMissing);
 extern void _rocksdb_close();
-extern void _rocksdb_destroy();
+extern void _rocksdb_destroy(int db_num);
 
 #endif   /* MISCADMIN_H */
