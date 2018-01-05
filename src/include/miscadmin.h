@@ -453,7 +453,9 @@ extern rocksdb_writebatch_t *writebatch;
 extern int writebatch_records;
 extern size_t rocks_value_buf_size;
 extern char * rocks_value_buf;
+extern uint64_t rocks_prev_key;
 
+extern void _uint64ToChar(uint64_t num, char key[]);
 extern void _rocksdb_open(int db_num, bool createIfMissing);
 extern void _rocksdb_close();
 extern void _rocksdb_destroy(int db_num);

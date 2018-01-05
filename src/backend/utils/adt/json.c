@@ -2723,6 +2723,7 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 	ulong u1;
 	ulong u2;
 	uint64_t unsignedKey;
+	char key[8];
 
 	char *err = NULL;
 
@@ -2733,12 +2734,18 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 	u1 = (ulong) tv.tv_sec*1000000;
 	u2 = (ulong) tv.tv_usec;
 	unsignedKey = (uint64_t) (u1 + u2);
-	
+	// to prevent key repetition
+	if (unsignedKey <= rocks_prev_key) {
+		unsignedKey = rocks_prev_key + 1;
+	}
+	rocks_prev_key = unsignedKey;
+
 	// custom string init
 	result = makeStringInfo();
 	composite_to_json(array, result, false);
 	
-	rocksdb_put(rocksdb, writeoptions, (char*)&unsignedKey, sizeof(unsignedKey), result->data, result->len, &err);
+	_uint64ToChar(unsignedKey, key); // can't just use unsignedKey because it gets reverted
+	rocksdb_put(rocksdb, writeoptions, key, sizeof(key), result->data, result->len, &err);
 	if (err != NULL) {
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),
@@ -2757,41 +2764,7 @@ row_to_json_rocks_sst(PG_FUNCTION_ARGS)
 extern Datum
 row_to_json_rocks_batch(PG_FUNCTION_ARGS)
 {
-	int         db_num = PG_GETARG_INT32(0);
-	Datum		array = PG_GETARG_DATUM(1);
-	StringInfo	result;
-
-	struct timeval tv;
-	ulong u1;
-	ulong u2;
-	uint64_t unsignedKey;
-
-	char *err = NULL;
-
-	_rocksdb_open(db_num, true);
-		
-	gettimeofday(&tv, NULL);
-	u1 = (ulong) tv.tv_sec*1000000;
-	u2 = (ulong) tv.tv_usec;
-	unsignedKey = (uint64_t) (u1 + u2);
-
-	result = makeStringInfo();
-	composite_to_json(array, result, false);
-	
-	rocksdb_writebatch_put(writebatch, (char*)&unsignedKey, sizeof(unsignedKey), result->data, result->len);
-	writebatch_records += 1;
-	if (writebatch_records > 20000) {
-		rocksdb_write(rocksdb, writeoptions, writebatch, &err);
-		writebatch_records = 0;
-	}
-	if (err != NULL) {
-			ereport(ERROR,
-				(errcode(ERRCODE_NO_DATA),
-				errmsg("[rocksdb], writebatch error: %s", err)));	
-	}
-
-	
-	PG_RETURN_INT64(unsignedKey);
+	PG_RETURN_TEXT_P(cstring_to_text("not implemented"));
 }
 
 extern Datum
@@ -2805,6 +2778,7 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 	ulong u1;
 	ulong u2;
 	uint64_t unsignedKey;
+	char key[8];
 
 	char *err = NULL;
 
@@ -2814,11 +2788,17 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 	u1 = (ulong) tv.tv_sec*1000000;
 	u2 = (ulong) tv.tv_usec;
 	unsignedKey = (uint64_t) (u1 + u2);
+	// to prevent key repetition
+	if (unsignedKey <= rocks_prev_key) {
+		unsignedKey = rocks_prev_key + 1;
+	}
+	rocks_prev_key = unsignedKey;
 
 	result = makeStringInfo();
 	_composite_to_csv(array, result);
 
-	rocksdb_put(rocksdb, writeoptions, (char*)&unsignedKey, sizeof(unsignedKey), result->data, result->len, &err);
+	_uint64ToChar(unsignedKey, key); // can't just use unsignedKey because it gets reverted
+	rocksdb_put(rocksdb, writeoptions, key, sizeof(key), result->data, result->len, &err);
 	if (err != NULL) {
 		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA),

@@ -73,8 +73,14 @@ const char rocksdbpath[] = "/tmp/rocksdb";
 
 size_t rocks_value_buf_size = 0;
 char * rocks_value_buf = NULL; // BTW, it's OK that it's never going to be freed
+uint64_t rocks_prev_key = 0;   // to compare a new key and the prev one to prevent a key repetition
 
 
+void _uint64ToChar(uint64_t num, char key[])
+{
+  for(int i = 0; i < 8; i++) 
+  	key[i] = num >> (8-1-i)*8;
+}
 
 void _rocksdb_name(int db_num, char* name)
 {
@@ -96,6 +102,9 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 		rocks_value_buf = (char*)malloc(rocks_value_buf_size);
 	}
 
+	rocks_prev_key = 0;
+
+	// db could be open but db_num is different
 	_rocksdb_close();
 
 	rocksdb_options = rocksdb_options_create();

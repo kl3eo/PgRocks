@@ -5062,6 +5062,8 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	
 	char *returned_value;
 	int64_t bigintkey;
+	char key[8];
+
 	size_t len;
 	int mylen;
 
@@ -5095,8 +5097,9 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	db_num = PG_GETARG_INT32(0);	
 	_rocksdb_open(db_num, false);
 	
-	bigintkey = PG_GETARG_INT64(1);	
-	returned_value = rocksdb_get(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), &len, &err);
+	bigintkey = PG_GETARG_INT64(1);
+	_uint64ToChar(bigintkey, key); // can't just use unsignedKey because it gets reverted
+	returned_value = rocksdb_get(rocksdb, readoptions, key, sizeof(key), &len, &err);
 	if (err != NULL) {
 		fprintf(stderr, "[rocksdb]: %s\n", err); 
 		assert(!err);	
@@ -5460,6 +5463,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	//char *csvLine;
 	size_t csvLineLen;	
 	int64_t bigintkey;
+	char key[8];
 
 	char *err = NULL;
 
@@ -5490,7 +5494,8 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 	_rocksdb_open(db_num, false);
 	
 	bigintkey = PG_GETARG_INT64(1);	
-	csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+	_uint64ToChar(bigintkey, key); // can't just use unsignedKey because it gets reverted
+	csvLineLen = rocksdb_get2(rocksdb, readoptions, key, sizeof(key), 
 								rocks_value_buf, rocks_value_buf_size, &err);
 	if (err != NULL) {
 		ereport(ERROR,
@@ -5508,7 +5513,7 @@ rocks_csv_populate_record_worker(FunctionCallInfo fcinfo)
 		rocks_value_buf_size = csvLineLen + 128;
 		rocks_value_buf = (char*)malloc(rocks_value_buf_size);
 
-		csvLineLen = rocksdb_get2(rocksdb, readoptions, (char*)&bigintkey, sizeof(bigintkey), 
+		csvLineLen = rocksdb_get2(rocksdb, readoptions, key, sizeof(key), 
 								rocks_value_buf, rocks_value_buf_size, &err);
 								
 		if (err != NULL) {
@@ -5559,6 +5564,7 @@ rocks_csv_to_record(PG_FUNCTION_ARGS)
 extern Datum
 rocks_csv_to_record2(PG_FUNCTION_ARGS)
 {
+	/*
 	int i;
 	char* iter;
 	char sep = '|';
@@ -5633,4 +5639,6 @@ rocks_csv_to_record2(PG_FUNCTION_ARGS)
 
 	tuple = heap_form_tuple(tupleDesc, values, nulls);
 	PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
+	*/
+	PG_RETURN_NULL();
 }
