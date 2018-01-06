@@ -4468,8 +4468,11 @@ DATA(insert OID = 8895 (  row_to_csv_rocks             PGNSP PGUID 12 1 0 0 0 f 
 DATA(insert OID = 8894 (  rocks_json_to_record		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 2 0 2249 "23 20" _null_ _null_ _null_ _null_ _null_ rocks_json_to_record _null_ _null_ _null_ ));
 DATA(insert OID = 8896 (  rocks_csv_to_record		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 2 0 2249 "23 20" _null_ _null_ _null_ _null_ _null_ rocks_csv_to_record _null_ _null_ _null_ ));
 DATA(insert OID = 8897 (  rocks_csv_to_record2		   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 2249 "114" _null_ _null_ _null_ _null_ _null_ rocks_csv_to_record2 _null_ _null_ _null_ ));
-
 DESCR("map row to json/svn rocks");
+
+DATA(insert OID = 8898 (  rocks_delete	           	   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 2 0 25 "23 20" _null_ _null_ _null_ _null_ _null_ rocks_delete _null_ _null_ _null_ ));
+DATA(insert OID = 8899 (  rocks_delete_range	       PGNSP PGUID 12 1 0 0 0 f f f f t f s s 3 0 25 "23 20 20" _null_ _null_ _null_ _null_ _null_ rocks_delete_range _null_ _null_ _null_ ));
+DESCR("delete rows in rocks");
 
 DATA(insert OID =  8891 (  rocks_destroy	     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 25 "23" _null_ _null_ _null_ _null_ _null_ rocks_destroy _null_ _null_ _null_ ));
 DESCR("rocks destoy db");

@@ -2808,6 +2808,70 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64(unsignedKey);
 }
 
+/* to delete row in rocksdb*/
+extern Datum
+rocks_delete(PG_FUNCTION_ARGS)
+{
+	int db_num;
+	uint64_t unsignedKey;
+	char key[8];
+	char *err = NULL;
+	
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb]: db num and key must be specified for delete command")));
+	
+	db_num = PG_GETARG_INT32(0);
+	_rocksdb_open(db_num, false);
+
+	unsignedKey = PG_GETARG_INT64(1);
+	_uint64ToChar(unsignedKey, key);
+
+	rocksdb_delete(rocksdb, writeoptions, key, sizeof(key), &err);
+	if (err != NULL) {
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb], delete error: %s", err)));
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text("OK"));
+}
+
+extern Datum
+rocks_delete_range(PG_FUNCTION_ARGS)
+{
+	int db_num;
+	uint64_t unsignedStartKey;
+	uint64_t unsignedEndKey;
+	char startKey[8];
+	char endKey[8];
+	char *err = NULL;
+	
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb]: db num and start/end keys must be specified for delete range command")));
+	
+	db_num = PG_GETARG_INT32(0);
+	_rocksdb_open(db_num, false);
+
+	unsignedStartKey = PG_GETARG_INT64(1);
+	_uint64ToChar(unsignedStartKey, startKey);
+	unsignedEndKey = PG_GETARG_INT64(2);
+	_uint64ToChar(unsignedEndKey, endKey);
+
+	rocksdb_writebatch_delete_range(writebatch, startKey, sizeof(startKey), endKey, sizeof(endKey));
+	rocksdb_write(rocksdb, writeoptions, writebatch, &err);
+	if (err != NULL) {
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb], delete range error: %s", err)));
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text("OK"));
+}
+
 extern Datum
 rocks_destroy(PG_FUNCTION_ARGS)
 {

@@ -33,3 +33,15 @@ delete from pg_catalog.pg_proc where proname='rocks_close';
 create table jar as select * from pg_catalog.pg_proc where oid = 89;
 update jar set proname='rocks_close',prosrc='rocks_close';
 insert into pg_catalog.pg_proc select * from jar;
+
+drop table if exists jar;
+delete from pg_catalog.pg_proc where proname='rocks_delete';
+create table jar as select * from pg_catalog.pg_proc where oid = 3155;
+update jar set proname='rocks_delete', pronargs=2, proargtypes='23 20',prorettype='25', prosrc='rocks_delete';
+insert into pg_catalog.pg_proc select * from jar;
+
+drop table if exists jar;
+delete from pg_catalog.pg_proc where proname='rocks_delete_range';
+create table jar as select * from pg_catalog.pg_proc where oid = 3155;
+update jar set proname='rocks_delete_range', pronargs=3, proargtypes='23 20 20',prorettype='25', prosrc='rocks_delete_range';
+insert into pg_catalog.pg_proc select * from jar;
