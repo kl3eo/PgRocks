@@ -78,7 +78,8 @@ uint64_t rocks_prev_key = 0;   // to compare a new key and the prev one to preve
 
 void _uint64ToChar(uint64_t num, char key[])
 {
-  for(int i = 0; i < 8; i++) 
+  int i;
+   for (i = 0; i < 8; i++) 
   	key[i] = num >> (8-1-i)*8;
 }
 
