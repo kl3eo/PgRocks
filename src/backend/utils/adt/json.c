@@ -36,6 +36,10 @@
 #include <assert.h>
 #include <inttypes.h>
 
+#include <sys/time.h>
+
+int NodeNumber;
+
 /*
  * The context of the parser is maintained by the recursive descent
  * mechanism, but is passed explicitly to the error reporting routine
@@ -2733,7 +2737,7 @@ row_to_json_rocks(PG_FUNCTION_ARGS)
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
 	u2 = (ulong) tv.tv_usec;
-	unsignedKey = (uint64_t) (u1 + u2);
+	unsignedKey = (uint64_t) (NodeNumber*10000000000000000 + u1 + u2);
 	// to prevent key repetition
 	if (unsignedKey <= rocks_prev_key) {
 		unsignedKey = rocks_prev_key + 1;
@@ -2787,7 +2791,7 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 	gettimeofday(&tv, NULL);
 	u1 = (ulong) tv.tv_sec*1000000;
 	u2 = (ulong) tv.tv_usec;
-	unsignedKey = (uint64_t) (u1 + u2);
+	unsignedKey = (uint64_t) (NodeNumber*10000000000000000 + u1 + u2);
 	// to prevent key repetition
 	if (unsignedKey <= rocks_prev_key) {
 		unsignedKey = rocks_prev_key + 1;

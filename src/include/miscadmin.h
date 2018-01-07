@@ -445,6 +445,8 @@ extern bool has_rolreplication(Oid roleid);
 extern bool BackupInProgress(void);
 extern void CancelBackup(void);
 
+extern int NodeNumber;
+
 extern rocksdb_t *rocksdb;
 extern rocksdb_options_t *rocksdb_options;
 extern rocksdb_writeoptions_t *writeoptions;
