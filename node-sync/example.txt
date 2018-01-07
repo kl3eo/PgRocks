@@ -1,0 +1,31 @@
+# if copied = false, trigger works and sends notification
+# if copied = true, trigger turns off
+drop table v1_dna_15;
+CREATE TABLE v1_dna_15(tab text, rev int, key bigint, copied bool);
+
+INSERT INTO v1_dna_15 VALUES('t', 0, 1, false);
+INSERT INTO v1_dna_15 VALUES('t', 0, 2, false);
+INSERT INTO v1_dna_15 VALUES('t', 0, 3, false);
+INSERT INTO v1_dna_15 VALUES('t', 0, 4, false);
+
+# procedure for trigger
+CREATE OR REPLACE FUNCTION v1_dna_15_insert_notify()
+  RETURNS trigger AS $$
+DECLARE
+  payload text;
+BEGIN
+  payload := (SELECT 15 || ',' || row_to_json(NEW));
+  perform pg_notify('v1_dna_insert', payload); 
+  RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+# trigger
+DROP TRIGGER IF EXISTS v1_dna_15_insert_trigger ON v1_dna_15;
+CREATE TRIGGER v1_dna_15_insert_trigger AFTER INSERT
+ON v1_dna_15
+FOR EACH ROW
+WHEN (NEW.copied = false)
+EXECUTE PROCEDURE v1_dna_15_insert_notify();
+
+# insert some row to check trigger
+INSERT INTO v1_dna_15 VALUES('t', 0, 5, false);
