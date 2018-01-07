@@ -2812,6 +2812,15 @@ row_to_csv_rocks(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64(unsignedKey);
 }
 
+/* to know the node number*/
+extern Datum
+rocks_get_node_number(PG_FUNCTION_ARGS)
+{
+	
+	PG_RETURN_INT32(NodeNumber);
+	
+}
+
 /* to delete row in rocksdb*/
 extern Datum
 rocks_delete(PG_FUNCTION_ARGS)

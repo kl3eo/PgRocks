@@ -2324,6 +2324,7 @@ insert OID = 8896 ( rocks_csv_to_record 11 10 12 1 0 0 0 f f f f t f s s 2 0 224
 insert OID = 8897 ( rocks_csv_to_record2 11 10 12 1 0 0 0 f f f f t f s s 1 0 2249 "114" _null_ _null_ _null_ _null_ _null_ rocks_csv_to_record2 _null_ _null_ _null_ )
 insert OID = 8898 ( rocks_delete 11 10 12 1 0 0 0 f f f f t f s s 2 0 25 "23 20" _null_ _null_ _null_ _null_ _null_ rocks_delete _null_ _null_ _null_ )
 insert OID = 8899 ( rocks_delete_range 11 10 12 1 0 0 0 f f f f t f s s 3 0 25 "23 20 20" _null_ _null_ _null_ _null_ _null_ rocks_delete_range _null_ _null_ _null_ )
+insert OID = 8900 ( rocks_get_node_number 11 10 12 1 0 0 0 f f f f t f s s 0 0 23 "" _null_ _null_ _null_ _null_ _null_ rocks_close _null_ _null_ _null_ )
 insert OID = 8891 ( rocks_destroy 11 10 12 1 0 0 0 f f f f t f s s 1 0 25 "23" _null_ _null_ _null_ _null_ _null_ rocks_destroy _null_ _null_ _null_ )
 insert OID = 8892 ( rocks_close 11 10 12 1 0 0 0 f f f f t f s s 0 0 25 "" _null_ _null_ _null_ _null_ _null_ rocks_close _null_ _null_ _null_ )
 insert OID = 3156 ( row_to_json 11 10 12 1 0 0 0 f f f f t f s s 2 0 114 "2249 16" _null_ _null_ _null_ _null_ _null_ row_to_json_pretty _null_ _null_ _null_ )
