@@ -28,4 +28,4 @@ WHEN (NEW.copied = false)
 EXECUTE PROCEDURE v1_dna_15_insert_notify();
 
 # insert some row to check trigger
-INSERT INTO v1_dna_15 VALUES('t', 0, 5, false);
+INSERT INTO v1_dna_15 VALUES('t', 0, 51515491590658129, false);

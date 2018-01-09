@@ -45,6 +45,8 @@ function setup_notification(name) {
     var sepPos = msg.payload.indexOf(',');
     var tableNum = msg.payload.substr(0, sepPos);
     var jsonRow = msg.payload.substr(sepPos + 1);
+    // fix big numbers
+    jsonRow = jsonRow.replace(/([\[:])?(\d{8,})([,\}\]])/g, "$1\"$2\"$3");
 
     for (var jointName in _joints) {
       if (jointName !== name) {
