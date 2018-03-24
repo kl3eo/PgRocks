@@ -1,0 +1,3 @@
+src/Makefile.global
+LIBS = -lpthread -lz -lreadline -lrt -lcrypt -ldl -lm -lsnappy -lgflags -lbz2 -llz4 -lzstd -lnuma -lrocksdb
+
