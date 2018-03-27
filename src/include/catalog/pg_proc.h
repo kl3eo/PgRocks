@@ -4474,7 +4474,7 @@ DATA(insert OID = 8898 (  rocks_delete	           	   PGNSP PGUID 12 1 0 0 0 f f
 DATA(insert OID = 8899 (  rocks_delete_range	       PGNSP PGUID 12 1 0 0 0 f f f f t f s s 3 0 25 "23 20 20" _null_ _null_ _null_ _null_ _null_ rocks_delete_range _null_ _null_ _null_ ));
 DESCR("delete rows in rocks");
 
-DATA(insert OID =  8900 (  rocks_get_node_number		     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 0 0 23 "" _null_ _null_ _null_ _null_ _null_ rocks_close _null_ _null_ _null_ ));
+DATA(insert OID =  8900 (  rocks_get_node_number		     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 0 0 23 "" _null_ _null_ _null_ _null_ _null_ rocks_get_node_number _null_ _null_ _null_ ));
 DESCR("rocks get node number");
 
 DATA(insert OID =  8891 (  rocks_destroy	     PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 25 "23" _null_ _null_ _null_ _null_ _null_ rocks_destroy _null_ _null_ _null_ ));
