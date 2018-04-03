@@ -1,62 +1,49 @@
 How To Set Up PostgreSQL With Plugin To RocksDB On Linux
 
-
 Introduction
 
-PostgreSQL is a well-known SQL database management system. 
+PostgreSQL is a well-known SQL database management system.
 
 RocksDB is a persistent key-value store and C/C++ library.
 
 PgRocks is a new plugin that uses DNA-like PostgreSQL data structure to link and easily migrate data between a PostgreSQL database and a RocksDB store.
 
-In this tutorial, you'll install and configure PgRocks, and by doing so you will set up a data bridge between PostgreSQL and RocksDB. 
+In this tutorial, you'll install and configure PgRocks, and by doing so you will set up a data bridge between PostgreSQL and RocksDB.
 
 This will require modifications in source code of both PostgreSQL and RocksDB, their compilation and installation, or re-installation, if they are already on the system.
 
 In the end of this guide you will see examples of how the plugin works.
 
-When you're finished, you'll basically understand how to migrate data from PostgreSQL to RocksDB and back with the new plugin.
+When you're finished, you'll basically understand how to flow data from PostgreSQL to RocksDB and back with the new plugin.
 
 
 Prerequisites
 
 Before you begin this guide you'll need the following:
 
-- a typical modern Linux system, like CentOs 7, Ubuntu 16 or 17, or Debian 9;
-
-- a root access (or non-root user with sudo privileges) on this system;
-
-- git and optionally wget installed on the system;
-
-- gcc compiler version 4.8 and later, also make.
+    - a typical modern Linux system, like CentOS 7, Ubuntu 16, or Debian 9;
+    - a root access (or non-root user with sudo privileges) on this system;
+    - git and optionally wget installed on the system;
+    - gcc compiler version 4.8 and later, also make.
 
 
-Step 1 - Preparing all necessary source code trees 
+
+Step 1 - Preparing all necessary source code trees
 
 First, download the source code for PostgreSQL. Unpack the source code tree into a new work directory, e.g. work_pgrocks:
 
-
 mkdir work_pgrocks
-
-
 cd work_pgrocks
-
-
 wget https://ftp.postgresql.org/pub/source/v10.3/postgresql-10.3.tar.gz
-
-
 tar zxvf postgresql-10.3.tar.gz
 
 In the same work directory (i.e. work_pgrocks), get the code for RocksDB and PgRocks with git:
 
 
 git clone https://github.com/facebook/rocksdb
-
-
 git clone https://github.com/kl3eo/PgRocks
 
-
-You have three new catalogs in your work directory, postgresql-10.3, rocksdb and PgRocks. 
+You have three new catalogs in your work directory, postgresql-10.3, rocksdb and PgRocks.
 
 Further in Steps 2 and 3 you will modify the RocksDB and PostgreSQL with files from the PgRocks tree.
 
@@ -67,291 +54,190 @@ First, locate the file with the code for patching RocksDB. It is in the file nam
 
 Apply this patch:
 
-
 cd rocksdb
-
-
 git apply ../PgRocks/rocksdb_get2.patch
 
-Before you proceed with compilation of the new RocksDB libraries, check that all the libs required for RocksDB are installed on the system.
-Methods of their installation depending on the system are at https://github.com/facebook/rocksdb/blob/master/INSTALL.md
+Before you proceed with compilation of the new RocksDB libraries, check that all the libs required for RocksDB are installed on the system. Methods of their installation depending on the system are at https://github.com/facebook/rocksdb/blob/master/INSTALL.md
 
-For example, to install the required libs on Debian or Ubuntu, give the following command as root (or with sudo prefix if run from a user account):
-
+For example, to install the required libs on Debian or Ubuntu, run the following command as root (or with sudo prefix if run from a user account):
 
 apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev libnuma-dev
-
 
 Now you're ready to compile and install (or possibly re-install) RocksDB. Go ahead with it:
 
 make static_lib
-
-
 make shared_lib
 
 Everything fine, go ahead and install (as root):
-
 
 make install
 
 Optionally, you may compile and install a useful tool ldb for working with RocksDB store. To do it, go to the tools catalog and run these commands:
 
-
 g++ -std=gnu++11 ldb.cc -o ldb -lrocksdb
-
-
 cp -a ldb /usr/local/bin
 
 Now you're ready to proceed to Step 3 and modify the code in PostgreSQL tree, then compile and install it.
-
 
 Step 3 - Modifying the code in PostgreSQL tree, compiling and installing it
 
 Run the following commands to overwrite the source files in PostgreSQL tree with newer files of the same name from PgRocks/src catalog:
 
-
 cd PgRocks/src
-
-
 cp -a * ../../postgresql-10.3/src/
-
 
 Then configure the PostgreSQL source code:
 
-
 cd ../../postgresql-10.3
-
-
 ./configure
 
-This command creates a file named Makefile.global in the src catalog. You will have to open it in the editor and modify it, manually replacing only one line, the one that starts with "LIBS". Replace it with another line you will find in the file named compile at the top level of PgRocks source tree. 
+This command creates a file named Makefile.global in the src catalog. You will have to open it in the editor and modify it, manually replacing only one line, the one that starts with "LIBS". Replace it with another line you will find in the file named compile at the top level of PgRocks source tree.
 
 These lines only differ in libs required by gcc to compile the code.
 
-For example, if in your src/Makefile there is the line:
-
-[label src/Makefile]
+If in your src/Makefile there is the line:
+ 
 LIBS = -lpthread -lz -lreadline -lrt -lcrypt -ldl -lm
-
 
 than you have to replace it with this line:
 
-[label src/Makefile]
 LIBS = -lpthread -lz -lreadline -lrt -lcrypt -ldl -lm -lsnappy -lgflags -lbz2 -llz4 -lzstd -lnuma -lrocksdb
 
+After editing the src/Makefile.global, you are ready to compile PostgreSQL.
 
-After editing the src/Makefile.global, you are ready to compile PostgreSQL. Go on and do it:
-
+Go on and do it:
 
 make
 
-Now that the compilation is complete and you'ready to install, please make sure that no older version of PostgreSQL exists on your system. 
+Now that the compilation is complete and you're ready to install, please make sure that no older version of PostgreSQL exists on your system.
 
-If another version of PostgreSQL had been by chance automatically installed previously and probably never used, just remove it now, 
-e.g. on Debian and Ubuntu give the following comand as root:
-
-
+If another version of PostgreSQL had been automatically installed (and probably never used), remove it now, e.g. on Debian and Ubuntu run the following command as root:
 
 apt remove PostgreSQL-10
 
-
-Now as root give the following command from the top level of PostgreSQL tree:
-
+Now as root run the following command from the top level of PostgreSQL tree:
 
 make install
 
-Make sure the newly instaled libs will be found by the linker:
-
+Make sure the newly installed libs will be found by the linker:
 
 ldconfig
 
-
-Only if you're installing PostgreSQL for the very first time, then give the following commands, also as root:
-
+Only if you're installing PostgreSQL for the very first time, then run the following commands, also as root:
 
 adduser postgres
-
-
 mkdir /usr/local/pgsql/data
-
-
 chown postgres /usr/local/pgsql/data
-
-
 su - postgres
-
-
 /usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
 
+Start the new PostgreSQL daemon as user postgres to see if everything is fine:
 
-Start the new PostgreSQL daemon as user postgres and see if everything is fine:
-
-
-su - postgres 
-
-
+su - postgres
 /usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data >logfile 2>&1 &
-
-
 /usr/local/pgsql/bin/psql template1
 
-If you are able to connect to the daemon with this command, then you see the prompt:
+If you are able to connect to the daemon with this command, then you see this prompt:
 
 template1=#
 
-
-You're ready to make new plugin functions visible by PostgreSQL, which you will do now at Step 4.
+You're ready to make new functions visible by PostgreSQL, which you will do now at Step 4.
 
 
 Step 4 - Making new internal functions visible by PostgreSQL
 
-Open the file named pg_catalog.pg_proc.txt found at the top level of PgRocks catalog in the editor, select, copy and then paste everything into the prompt that you have just opened in the previous Step. This will result in many lines of output like this:
+Open the file named pg_catalog.pg_proc.txt found at the top level of PgRocks catalog in the editor, select, copy and then paste everything into the prompt that you have opened at the previous Step. This will result in many lines of output like this:
 
 (...)
 
 drop table if exists jar;
- 
-
 DROP TABLE
-
-
 delete from pg_catalog.pg_proc where proname='rocks_get_node_number';
- 
-
 DELETE 0
-
-
 create table jar as select * from pg_catalog.pg_proc where oid = 89;
-
-
 SELECT 1
 
 (...)
 
+If you have made mistakes while copy-pasting, repeat the whole Step 4 from beginning to end, copy and paste ALL the lines from the pg_catalog.pg_proc.txt into the prompt.
 
-If you have made mistakes while copypasting, repeat the whole Step 4 from beginning to end, copy and paste ALL the lines from the "pg_catalog.pg_proc.txt" into the prompt.
-
-This is it, and now you are ready to start using the plugin.
+This is it, and now you are ready to start using PgRocks.
 
 
 Step 5 - Creating a test suit for the plugin and running examples
 
-In this Step you will see how the the plugin works. 
+In this Step you will see how the the plugin works.
 
 You will only use three of new PostgreSQL/PgRocks functions, one for writing data to RocksDB, one for reading from it, and one for closing the open connection.
 
-
 -- First, create a test database as user postgres.
 
-
-su - postgres 
-
-
+su - postgres
 /usr/local/pgsql/bin/createdb test
-
 
 -- Second, create there a table named players and populate it with test data:
 
-
 /usr/local/pgsql/bin/psql test
-
-
 
 create table players(name text, aka text, dob date, weight float, height int, last_seen timestamp); 
 
-  
 CREATE TABLE
 
-
-
 insert into players values ('Peter Stevens','Boss', '1956-06-30', 85.4,169,'2017-10-25 17:30');
-
-
 insert into players values ('Mike Palmer','Hippy', '1988-12-06', 75.5,184,'2018-02-28 14:20');
-
-
 insert into players values ('Dorothy Brown','Miss D', '1992-07-12', 64.3,172,'2018-03-15 09:25');
-
-
 insert into players values ('Linda Chambers','Jamaica', '1987-03-10', 57.7,180,'2018-04-01 14:00');
-
-
 insert into players values ('Claud Moulin','French', '1944-10-17', 68.1,170,'2017-09-15 12:30');
 
+select * from players;      
 
-
-
-select * from players;
- 
- 
-      name      |   aka   |    dob     | weight | height |      last_seen      
+name      |   aka   |    dob     | weight | height |      last_seen     
 ----------------+---------+------------+--------+--------+---------------------
  Peter Stevens  | Boss    | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
  Mike Palmer    | Hippy   | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
  Dorothy Brown  | Miss D  | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
  Linda Chambers | Jamaica | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
  Claud Moulin   | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
- 
 
 (5 rows)
  
 
 -- Third, create another table named venues and also populate it with test data:
 
-
 create table venues (address text, capacity int);
-
-
 insert into venues values ('Baker St. 221b', 330);
-
-
 insert into venues values ('Downing St. 10', 50);
-
-
 insert into venues values ('Marylebone Rd', 1000);
 
-
-
--- Fourth, create an empty "DNA" table, version 1 (v1 stands for "version one"), for RocksDB "store number 1";
-
+-- Fourth, create an empty "DNA" table (v1 stands for "version one") for RocksDB "store number 1";
 
 create table v1_dna_1 (tbl text, rev int, key bigint);
 
+-- Fifth, pack the data from the two test table into a new RocksDB store located at /tmp/rocksdb_1 on your file system - i.e. to "store number one".
 
--- Fifth, pack the data from the two test table into a new RocksDB store located at /tmp/rocksdb_1 on your filesystem - i.e. to "store number one".
-
-For this you will use a new internal PostgreSQL/PgRocks function called row_to_json_rocks, which creates the new store, if it does not exist, 
+For this you will use a new internal PostgreSQL/PgRocks function called row_to_json_rocks, which creates the new store, if it does not exist,
 and writes all rows from the given PG table into this new store as JSON values.
 
-
-insert into v1_dna_1 (tbl, rev, key) select 'players',1,row_to_json_rocks(1,players) from players;
-
-
-insert into v1_dna_1 (tbl, rev, key) select 'venues',1,row_to_json_rocks(1,venues) from venues;
-
-
+insert into v1_dna_1 (tbl, rev, key) select 'players', 1, row_to_json_rocks(1,players) from players;
+insert into v1_dna_1 (tbl, rev, key) select 'venues', 1, row_to_json_rocks(1,venues) from venues;
 select rocks_close();
 
+Notice the need to close the RocksDB connection each time after write operations, by calling function rocks_close.
 
-Notice the need to close the RocksDB connection each time after write operations, by calling function rocks_close().
-
-N.B. You have inserted "1" into rev column of DNA-table. By doing this you assume that all the rows are of revision "one". 
-You won't need the data revisions in these examples.
+N.B. You have inserted "1" into rev column of DNA-table. By doing this you assume that all the rows are of revision "one". You won't need the data revisions in these examples.
 
 The function row_to_json_rocks that you've just used takes two arguments, (1) the number of the store and (2) the name of the table.
 
-It returns the key of type bigint where the first digit is the number of the node (1 by default), and the other digits are epoch time in microseconds, 
+It returns the key of type bigint where the first digit is the number of the node (1 by default), and the other digits are epoch time in microseconds,
 measured at the moment of packing the record into the store.
 
 These keys are guaranteed to be unique and as such they are assigned to the values and written in the RocksDB store.
 
 You will keep these keys in the column key of our DNA table:
 
-
 select * from v1_dna_1;
- 
- 
-   tbl   | rev |        key        
+
+   tbl   | rev |        key       
 ---------+-----+-------------------
  players |   1 | 11522687676247617
  players |   1 | 11522687676247896
@@ -361,27 +247,24 @@ select * from v1_dna_1;
  venues  |   1 | 11522687676275189
  venues  |   1 | 11522687676275254
  venues  |   1 | 11522687676275269
+ 
 (8 rows)
-
 
 -- Sixth, drop the tables players and venues  - since you now keep all the data in RocksDB, you don't need the original tables any more.
 
 
 drop table players;
- 
-
 drop table venues;
- 
-
--- Seventh, take a look at our data how it is stored in RocksDB. 
-
-You will need the bigint keys printed as hexadecimal for data search with ldb:
 
 
-select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v1_dna_1;
+-- Seventh, take a look at our data how it is stored in RocksDB.
+
+You will need the bigint keys printed as hexadecimal for searching with ldb:
 
 
-      hex_key       
+select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v1_dna_1;      
+
+hex_key      
 --------------------
  0x0028efd2c9ccee41
  0x0028efd2c9ccef58
@@ -393,12 +276,10 @@ select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v1_dna_1;
  0x0028efd2c9cd5a45
 (8 rows)
 
-
 Quit the psql shell and look at our data packed as JSON structures in our RocksDB store:
 
 
 ldb --db=/tmp/rocksdb_1 scan --key_hex
-
 
 0x0028EFD2C9CCEE41 : {"name":"Peter Stevens","aka":"Boss","dob":"1956-06-30","weight":85.4,"height":169,"last_seen":"2017-10-25T17:30:00"}
 0x0028EFD2C9CCEF58 : {"name":"Mike Palmer","aka":"Hippy","dob":"1988-12-06","weight":75.5,"height":184,"last_seen":"2018-02-28T14:20:00"}
@@ -409,44 +290,37 @@ ldb --db=/tmp/rocksdb_1 scan --key_hex
 0x0028EFD2C9CD5A36 : {"address":"Downing St. 10","capacity":50}
 0x0028EFD2C9CD5A45 : {"address":"Marylebone Rd","capacity":1000}
 
+
 You may now search the data in this store by the key:
 
-
-ldb --db=/tmp/rocksdb_1 get 0x0028EFD2C9CCEF8F --key_hex
-
+ldb --db=/tmp/rocksdb_1 get 0x0028EFD2C9CCEF8F --key_hex 
 
 {"name":"Linda Chambers","aka":"Jamaica","dob":"1987-03-10","weight":57.7,"height":180,"last_seen":"2018-04-01T14:00:00"}
 
-
 -- Eighth, finally get the data back into table players that you'd dropped earlier, - suppose you need it again.
 
-You will use the "getback" function rocks_json_to_record, which also takes two arguments - (1) number of the store and (2) the key, and returns the stored record:
+You will use the counterpart function rocks_json_to_record, which also takes two arguments - (1) number of the store and (2) the key, and returns the stored record:
 
 create table players as select d.* from v1_dna_1, rocks_json_to_record(1,v1_dna_1.key) d(name text, aka text, dob date, weight float, height int, last_seen timestamp) where v1_dna_1.tbl = 'players';
-
-
+ 
 SELECT 5
 
+select * from players;      
 
-
-select * from players;
-
-
-
-      name      |   aka   |    dob     | weight | height |      last_seen      
+name      |   aka   |    dob     | weight | height |      last_seen     
 ----------------+---------+------------+--------+--------+---------------------
  Peter Stevens  | Boss    | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
  Mike Palmer    | Hippy   | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
  Dorothy Brown  | Miss D  | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
  Linda Chambers | Jamaica | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
  Claud Moulin   | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 
 (5 rows)
-
 
 Conclusion
 
-In this tutorial, you've explored PgRocks which is a plugin to migrate data between PostgreSQL and RocksDB.
+In this tutorial, you've explored PgRocks which is a plugin to flow data between PostgreSQL and RocksDB.
 
 You've also seen how it is possible to enhance the PostgreSQL API to create new internal functions for migrating the native data to external storage.
 
-You may further explore PgRocks and take a look at a live demo you'll find at http://pgrocks.com about how PgRocks is used for syncing PostgreSQL nodes over the network.
+You may further explore PgRocks and take a look at a live demo you'll find at http://pgrocks.com about how PgRocks can be used for syncing PostgreSQL nodes over the network.
