@@ -187,7 +187,7 @@ insert into players values ('Peter Stevens','Boss', '1956-06-30', 85.4,169,'2017
 insert into players values ('Mike Palmer','Hippy', '1988-12-06', 75.5,184,'2018-02-28 14:20');
 insert into players values ('Dorothy Brown','Miss D', '1992-07-12', 64.3,172,'2018-03-15 09:25');
 insert into players values ('Linda Chambers','Jamaica', '1987-03-10', 57.7,180,'2018-04-01 14:00');
-insert into players values ('Claud Moulin','French', '1944-10-17', 68.1,170,'2017-09-15 12:30');
+insert into players values ('Claude Moulin','French', '1944-10-17', 68.1,170,'2017-09-15 12:30');
 
 select * from players;      
 
@@ -197,7 +197,7 @@ name      |   aka   |    dob     | weight | height |      last_seen
  Mike Palmer    | Hippy   | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
  Dorothy Brown  | Miss D  | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
  Linda Chambers | Jamaica | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
- Claud Moulin   | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ Claude Moulin  | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
 
 (5 rows)
  
@@ -285,7 +285,7 @@ ldb --db=/tmp/rocksdb_1 scan --key_hex
 0x0028EFD2C9CCEF58 : {"name":"Mike Palmer","aka":"Hippy","dob":"1988-12-06","weight":75.5,"height":184,"last_seen":"2018-02-28T14:20:00"}
 0x0028EFD2C9CCEF79 : {"name":"Dorothy Brown","aka":"Miss D","dob":"1992-07-12","weight":64.3,"height":172,"last_seen":"2018-03-15T09:25:00"}
 0x0028EFD2C9CCEF8F : {"name":"Linda Chambers","aka":"Jamaica","dob":"1987-03-10","weight":57.7,"height":180,"last_seen":"2018-04-01T14:00:00"}
-0x0028EFD2C9CCEFA4 : {"name":"Claud Moulin","aka":"French","dob":"1944-10-17","weight":68.1,"height":170,"last_seen":"2017-09-15T12:30:00"}
+0x0028EFD2C9CCEFA4 : {"name":"Claude Moulin","aka":"French","dob":"1944-10-17","weight":68.1,"height":170,"last_seen":"2017-09-15T12:30:00"}
 0x0028EFD2C9CD59F5 : {"address":"Baker St. 221b","capacity":330}
 0x0028EFD2C9CD5A36 : {"address":"Downing St. 10","capacity":50}
 0x0028EFD2C9CD5A45 : {"address":"Marylebone Rd","capacity":1000}
@@ -313,7 +313,7 @@ name      |   aka   |    dob     | weight | height |      last_seen
  Mike Palmer    | Hippy   | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
  Dorothy Brown  | Miss D  | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
  Linda Chambers | Jamaica | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
- Claud Moulin   | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ Claude Moulin  | French  | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
  
 (5 rows)
 
