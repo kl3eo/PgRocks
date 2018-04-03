@@ -6,7 +6,7 @@ PostgreSQL is a well-known SQL database management system.
 
 RocksDB is a persistent key-value store and C/C++ library.
 
-PgRocks is a new plugin that uses DNA-like PostgreSQL data structure to link and easily migrate data between a PostgreSQL database and a RocksDB store.
+PgRocks is a new plugin that uses DNA-like PostgreSQL data structure to link and easily flow data between a PostgreSQL database and a RocksDB store.
 
 In this tutorial, you'll install and configure PgRocks, and by doing so you will set up a data bridge between PostgreSQL and RocksDB.
 
@@ -166,7 +166,7 @@ This is it, and now you are ready to start using PgRocks.
 
 Step 5 - Creating a test suit for the plugin and running examples
 
-In this Step you will see how the the plugin works.
+In this Step you will see how the plugin works.
 
 You will only use three of new PostgreSQL/PgRocks functions, one for writing data to RocksDB, one for reading from it, and one for closing the open connection.
 
