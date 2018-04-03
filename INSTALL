@@ -197,7 +197,7 @@ su - postgres
 
 If you are able to connect to the daemon with this command, then you see the prompt:
 
-
+template1=#
 
 
 You're ready to make new plugin functions visible by PostgreSQL, which you will do now at Step 4.
