@@ -317,6 +317,30 @@ name      |   aka   |    dob     | weight | height |      last_seen
  
 (5 rows)
 
+-- Ninth, create a temporary table in PostgreSQL from the RocksDB store, make some calculations and drop it on commit, such as:
+
+CREATE OR REPLACE FUNCTION sql_main_sum_field(text,text)
+RETURNS float AS $$
+DECLARE 
+    result float := 0;
+BEGIN
+    
+    EXECUTE format('create temp table temp_table on commit drop as select d.* from v1_dna_1, rocks_json_to_record(1,v1_dna_1.key) d(%s text) where v1_dna_1.tbl = ''%s'' ',$2,$1);
+
+    EXECUTE format('select sum(%s::float) from temp_table',$2) into result;
+
+    return result;
+
+END;$$ LANGUAGE plpgsql;
+
+test=# select sql_main_sum_field('venues','capacity') as total;
+
+
+ total 
+-------
+  1380
+(1 row)
+
 Conclusion
 
 In this tutorial, you've explored PgRocks which is a plugin to flow data between PostgreSQL and RocksDB.

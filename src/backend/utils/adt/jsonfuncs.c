@@ -5124,8 +5124,7 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	jsv.val.json.str = VARDATA_ANY(json);
 	jsv.val.json.len = mylen;
 
-	rettuple = populate_composite(&cache->io, tupType, tupTypmod,
-								  NULL, fnmcxt, rec, &jsv);
+	rettuple = populate_composite(&cache->io, tupType, tupTypmod, NULL, fnmcxt, rec, &jsv);
 
 
 	if (tupdesc)
@@ -5137,11 +5136,72 @@ rocks_json_populate_record_worker(FunctionCallInfo fcinfo)
 	free(buf);
 	free(returned_value);
 
-	//rocksdb_close(db);
-	//rocksdb_options_destroy(options);	
-  	//rocksdb_readoptions_destroy(readoptions);
   	
 	PG_RETURN_DATUM(rettuple);
+}
+
+static Datum
+rocks_json_populate_json_worker(FunctionCallInfo fcinfo)
+{
+	JsValue		jsv = {0};
+
+	MemoryContext fnmcxt = fcinfo->flinfo->fn_mcxt;
+	PopulateRecordCache *cache = fcinfo->flinfo->fn_extra;
+	
+	text	   *json;
+	
+	int db_num;
+	char *err = NULL;
+	char *buf;
+	
+	char *returned_value;
+	int64_t bigintkey;
+	char key[8];
+
+	size_t len;
+	int mylen;
+
+
+	if (!cache)
+		fcinfo->flinfo->fn_extra = cache =
+			MemoryContextAllocZero(fnmcxt, sizeof(*cache));
+
+
+	if (PG_ARGISNULL(0))
+			PG_RETURN_NULL();
+
+
+	
+	jsv.is_json = 1;
+
+	db_num = PG_GETARG_INT32(0);	
+	_rocksdb_open(db_num, false);
+	
+	bigintkey = PG_GETARG_INT64(1);
+	_uint64ToChar(bigintkey, key); // can't just use unsignedKey because it gets reverted
+	returned_value = rocksdb_get(rocksdb, readoptions, key, sizeof(key), &len, &err);
+	
+	if (err != NULL) {
+		fprintf(stderr, "[rocksdb]: %s\n", err); 
+		assert(!err);	
+	}
+
+	mylen = strchr(returned_value,'}') - returned_value + 1;
+
+	buf = malloc(mylen+2);
+
+	snprintf(buf,mylen+2, "-%s", returned_value);
+		
+	json = (text *) buf;
+
+	jsv.val.json.str = VARDATA_ANY(json);
+	jsv.val.json.len = mylen;
+
+
+	free(buf);
+	free(returned_value);
+	
+	PG_RETURN_TEXT_P(cstring_to_text_with_len(jsv.val.json.str, jsv.val.json.len));
 }
 
 /* *********************************************************************************
@@ -5553,6 +5613,12 @@ extern Datum
 rocks_json_to_record(PG_FUNCTION_ARGS)
 {
 	return rocks_json_populate_record_worker(fcinfo);
+}
+
+extern Datum
+rocks_json_to_json(PG_FUNCTION_ARGS)
+{
+	return rocks_json_populate_json_worker(fcinfo);
 }
 
 extern Datum

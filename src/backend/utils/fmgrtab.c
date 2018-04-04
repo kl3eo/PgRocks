@@ -2775,6 +2775,7 @@ const FmgrBuiltin fmgr_builtins[] = {
   { 8898, "rocks_delete", 2, true, false, rocks_delete },
   { 8899, "rocks_delete_range", 3, true, false, rocks_delete_range },
   { 8900, "rocks_get_node_number", 1, true, false, rocks_get_node_number },
+  { 8901, "rocks_json_to_json", 2, true, false, rocks_json_to_json },
   
   /* dummy entry is easier than getting rid of comma after last real one */
   /* (not that there has ever been anything wrong with *having* a

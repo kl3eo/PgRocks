@@ -2514,6 +2514,7 @@ extern Datum rocks_destroy(PG_FUNCTION_ARGS);
 extern Datum rocks_close(PG_FUNCTION_ARGS);
 extern Datum row_to_json_rocks_batch(PG_FUNCTION_ARGS);
 extern Datum rocks_json_to_record(PG_FUNCTION_ARGS);
+extern Datum rocks_json_to_json(PG_FUNCTION_ARGS);
 extern Datum row_to_csv_rocks(PG_FUNCTION_ARGS);
 extern Datum rocks_csv_to_record(PG_FUNCTION_ARGS);
 extern Datum rocks_csv_to_record2(PG_FUNCTION_ARGS);
