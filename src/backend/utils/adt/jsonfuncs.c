@@ -5169,8 +5169,6 @@ rocks_json_populate_json_worker(FunctionCallInfo fcinfo)
 
 	if (PG_ARGISNULL(0))
 			PG_RETURN_NULL();
-
-
 	
 	jsv.is_json = 1;
 
@@ -5196,7 +5194,6 @@ rocks_json_populate_json_worker(FunctionCallInfo fcinfo)
 
 	jsv.val.json.str = VARDATA_ANY(json);
 	jsv.val.json.len = mylen;
-
 
 	free(buf);
 	free(returned_value);
