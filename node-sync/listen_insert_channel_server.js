@@ -27,8 +27,8 @@ var _joints = {
 function update_table_in_joint(name, from, tableNum, jsonRow) {
   var client = _joints[name].client;
   var row = JSON.parse(jsonRow);
-  client.query('INSERT INTO v1_dna_' + tableNum + '(tab, rev, key) VALUES($1,$2,$3)'
-    , [row.tab, row.rev, row.key])
+  client.query('INSERT INTO v1_dna_' + tableNum + '(tab, rev, key,ancestor) VALUES($1,$2,$3,$4)'
+    , [row.tab, row.rev, row.key, row.ancestor])
     .then(function()     { console.log(name + ': client got update from ' + from + ', key = ' + row.key); })
     .catch(function(err) { console.error(name + ': client COULD NOT get update,', '\nrow = ' + jsonRow, err.stack); });
   
