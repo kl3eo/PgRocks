@@ -1,0 +1,690 @@
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _d_tab_rocks_v2(text,int,int)
+RETURNS integer AS $$
+DECLARE 
+j bigint;
+r int;
+BEGIN
+
+FOR r IN
+EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
+int',$2,$3)
+    LOOP
+    
+FOR j IN EXECUTE format('select key from v2_dna_%s where tab = ''%s''',  r, $1) 
+LOOP
+EXECUTE format('select rocks_delete(%s,%s)',r,j);
+END LOOP;
+EXECUTE format('select rocks_close()');
+EXECUTE format('delete from v2_dna_%s where tab = ''%s''',  r, $1);
+RAISE NOTICE 'done for db %', r;
+    END LOOP;
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _d_rocksdb(int,int)
+RETURNS integer AS $$
+DECLARE 
+
+r int;
+BEGIN
+
+FOR r IN
+EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::int',$1,$2)
+    LOOP
+EXECUTE format('select rocks_destroy(%s)',  r);
+    END LOOP;
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _d_c0(text, int,int)
+RETURNS integer AS $$
+DECLARE 
+
+r int;
+BEGIN
+
+FOR r IN
+EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
+int',$2,$3)
+    LOOP
+EXECUTE format('drop table if exists %s_c0_%s', $1, r);
+    END LOOP;
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _i_v2_dna(text,text,int,int)
+RETURNS integer AS $$
+DECLARE 
+r integer := 0;
+resultCount integer := 0;
+BEGIN
+
+FOR r IN EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
+    LOOP
+EXECUTE format('create table v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
+resultCount = resultCount + 1;
+    END LOOP;
+   
+return resultCount;
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _i_v2_dna(int,int,int)
+RETURNS integer AS $$
+DECLARE 
+
+r integer := 0;
+resultCount integer := 0;
+
+BEGIN
+
+FOR r IN
+
+EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
+int',$1,$2)
+    LOOP
+EXECUTE format('drop table if exists v2_dna_%s', r);
+if $3 = 1 then 
+EXECUTE format('create table v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
+end if;
+resultCount = resultCount + 1;
+    END LOOP;
+   
+    return resultCount;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _w_v2_dna(text, text, int)
+RETURNS integer AS $$
+DECLARE 
+
+    resultCount integer := 0;
+
+BEGIN
+EXECUTE format('truncate tmp');
+EXECUTE format('truncate v2_dna_tmp');
+EXECUTE format('insert into tmp select * from %s where %s = %s',$1,$2,$3);
+EXECUTE format('insert into v2_dna_tmp (tab, rev, key) select ''%s'',1,row_to_csv_rocks(%s,tmp) from tmp',$1,$3);
+EXECUTE format('update v2_dna_tmp set ancestor=key');
+EXECUTE format('insert into v2_dna_%s select * from v2_dna_tmp',$3);
+EXECUTE format('select rocks_close()');
+
+    return resultCount;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _wc_v2_dna(text,text,int,int)
+returns integer AS $_wc_v2_dna$
+DECLARE 
+resultCount integer := 0;
+r int := $3+1;
+BEGIN
+
+EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2);
+EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s where %s = %s',$1,$2,r);
+EXECUTE format('CREATE TEMP TABLE v2_dna_tmp (tab text, rev int, key bigint, ancestor bigint) on commit drop');
+
+FOR r IN
+EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
+    LOOP
+RAISE NOTICE 'Executing _w_v2_dna(''%'',''%'',%):', $1, $2, r;
+EXECUTE format('select _w_v2_dna(''%s'',''%s'',%s)',$1, $2, r) into resultCount;
+
+    END LOOP;
+RETURN resultCount;
+
+END;$_wc_v2_dna$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _w_new_row()
+returns trigger AS $_w_new_row$
+
+DECLARE
+v bigint := 0;
+rev_old int := 1;
+payload text;
+vc text;
+ancs text;
+
+BEGIN
+
+IF (TG_OP = 'INSERT') THEN
+
+EXECUTE 'select rocks_get_node_number()' into v;
+RAISE NOTICE 'new key(''%''):',NEW.key;
+IF (v = floor(NEW.key/10000000000000000)) THEN
+
+drop table if exists tmp;
+CREATE TEMP TABLE tmp on commit drop as select NEW.*;
+ALTER TABLE tmp drop column key;
+EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp',TG_ARGV[1]) into v;
+EXECUTE format('select rocks_close()');
+
+EXECUTE format('select cast(%s as text)',v) into vc;
+payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc) );
+  perform pg_notify('v2_dna_insert', payload); 
+
+EXECUTE format('insert into v2_dna_%s (tab, rev, key, ancestor) values(''%s'',1,%s,%s)',TG_ARGV[1],TG_ARGV[0],v,v);
+NEW.key = v;
+
+END IF;
+RETURN NEW;
+
+ELSIF (TG_OP = 'UPDATE') THEN
+drop table if exists tmp;
+CREATE TEMP TABLE tmp on commit drop as select NEW.*;
+ALTER TABLE tmp drop column key;
+EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp',TG_ARGV[1]) into v;
+EXECUTE format('select rocks_close()');
+EXECUTE format('select rev, ancestor::text from v2_dna_%s where key = %s',TG_ARGV[1],NEW.key) into rev_old, ancs ;
+
+EXECUTE format('select cast(%s as text)',v) into vc;
+payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',rev_old+1,'key',vc, 'ancestor', ancs) );
+  perform pg_notify('v2_dna_insert', payload);
+
+EXECUTE format('insert into v2_dna_%s (tab, rev, key, ancestor) values (''%s'',%s,%s,%s)',TG_ARGV[1],TG_ARGV[0],rev_old+1,v, ancs);
+
+EXECUTE format('select cast(%s as text)',NEW.key) into vc;
+payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
+perform pg_notify('v2_dna_update', payload); 
+
+EXECUTE format('update v2_dna_%s set rev = %s where key = %s',TG_ARGV[1],rev_old*(-1),NEW.key);
+
+NEW.key = v;
+RETURN NEW;
+
+ELSIF (TG_OP = 'DELETE') THEN
+
+EXECUTE format('select rev, ancestor::text from v2_dna_%s where key = %s',TG_ARGV[1],OLD.key) into rev_old, ancs;
+
+IF (rev_old > 0) THEN
+EXECUTE 'select cast( rocks_get_node_number()*10000000000000000+ EXTRACT(EPOCH FROM current_timestamp)*1000000 as bigint)' into v;
+EXECUTE format('select cast( %s as text)',v) into vc;
+
+payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',0,'key',vc,'ancestor', ancs) );
+perform pg_notify('v2_dna_insert', payload); 
+
+EXECUTE format('insert into v2_dna_%s (tab, rev, key, ancestor) values(''%s'',0,%s,%s)',TG_ARGV[1],TG_ARGV[0],vc,ancs);
+
+EXECUTE format('select cast(%s as text)',OLD.key) into vc;
+payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
+perform pg_notify('v2_dna_update', payload); 
+
+EXECUTE format('update v2_dna_%s set rev = %s where key = %s',TG_ARGV[1],rev_old*(-1),OLD.key);
+
+END IF;
+
+RETURN OLD;
+
+END IF;
+
+END;$_w_new_row$ LANGUAGE plpgsql;
+
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _checkout_c0(text,int,int)
+RETURNS integer AS $$
+
+BEGIN
+
+if ($1 = 'players') then
+
+else 
+RETURN -1;
+end if;
+
+if $3 = 1 then 
+EXECUTE format('drop table if exists %s_c0_%s',$1,$2); 
+end if;
+
+if $1 = 'players' then
+
+EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
+from v2_dna_%s, rocks_csv_to_record(%s,v2_dna_%s.key) 
+d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where v2_dna_%s.rev  > 0 and v2_dna_%s.tab = ''%s''',$1,$2,$2,$2,$2,$2,$2,$1);
+
+end if;
+
+  
+EXECUTE format('select rocks_close()');
+
+EXECUTE format('CREATE TRIGGER %s_c0_%s_i
+BEFORE INSERT OR UPDATE OR DELETE 
+ON %s_c0_%s
+FOR EACH ROW
+EXECUTE PROCEDURE _w_new_row(''%s'',%s);',$1,$2,$1,$2,$1,$2);
+
+
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _rewind_c0(text,int,timestamptz)
+RETURNS integer AS $$
+
+BEGIN
+
+if ($1 = 'players') then
+
+else 
+RETURN -1;
+end if;
+
+EXECUTE format('drop table if exists %s_c0_%s',$1,$2); 
+
+EXECUTE format('create temp table tmp on commit drop as select max(abs(rev)) as max, min(abs(rev)) as min, ancestor from v2_dna_%s where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz ''%s'')*1000000 and tab = ''%s'' group by ancestor',$2,$3,$1);
+
+if $1 = 'players' then
+
+EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
+from v2_dna_%s, tmp, rocks_csv_to_record(%s,v2_dna_%s.key) 
+d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where abs(v2_dna_%s.rev) = tmp.max and tmp.min != 0 and v2_dna_%s.ancestor = tmp.ancestor',$1,$2,$2,$2,$2,$2,$2);
+
+end if;
+
+  
+EXECUTE format('select rocks_close()');
+
+EXECUTE format('CREATE TRIGGER %s_c0_%s_i
+BEFORE INSERT OR UPDATE OR DELETE 
+ON %s_c0_%s
+FOR EACH ROW
+EXECUTE PROCEDURE _w_new_row(''%s'',%s);',$1,$2,$1,$2,$1,$2);
+
+
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _atomic_c0(text,int,bigint)
+
+RETURNS integer AS $$
+
+BEGIN
+
+if ($1 = 'players') then
+
+else 
+	RETURN -1;
+end if;
+
+drop table if exists tmp;
+
+if $1 = 'players' then
+
+EXECUTE format('create temp table tmp on commit drop as select %s, d.*  
+from v2_dna_%s, rocks_csv_to_record(%s,%s)
+d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where v2_dna_%s.key = %s',$3,$2,$2,$3,$2,$3);
+EXECUTE format('insert into %s_c0_%s select * from tmp',$1,$2);
+
+end if;
+
+EXECUTE format('select rocks_close()');
+
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _p_c0(text,int,int,int)
+returns integer AS $$
+DECLARE 
+r int;
+BEGIN
+
+FOR r IN
+EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
+int',$2,$3)
+    LOOP
+RAISE NOTICE 'Executing _checkout_c0(''%'',%,%):',$1,r,$4;
+EXECUTE format('select _checkout_c0(''%s'',%s,%s)',$1,r,$4) into r;
+
+    END LOOP;
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+
+
+insert into players values ('Petra Che','Baby', '1989-05-30', 62.3,180,'2017-12-04 11:20');
+insert into players values ('Mike Bryan','Joker', '1984-08-21', 80.0,180,'2018-04-08 06:25');
+insert into players values ('Alicia Silver','Checkmate', '1995-09-02', 57.8,168,'2017-05-24 09:05');
+insert into players values ('Fernan Ozy','Beast', '1967-12-12', 92.7,177,'2017-12-30 16:10');
+insert into players values ('Ivan Lebed','Russo', '1959-01-10', 77.4,180,'2018-03-30 14:30');
+
+
+====TEST========TEST========TEST========TEST====
+====TEST========TEST========TEST========TEST====
+
+test=# select * from players where club_id = 5;
+      name      |    aka    |    dob     | weight | height |      last_seen      | club_id 
+----------------+-----------+------------+--------+--------+---------------------+---------
+ Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00 |       5
+ Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00 |       5
+ Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00 |       5
+ Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00 |       5
+ Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00 |       5
+ Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00 |       5
+ Mike Bryan     | Joker     | 1984-08-21 |     80 |    180 | 2018-04-08 06:25:00 |       5
+ Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00 |       5
+ Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00 |       5
+ Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00 |       5
+(10 rows)
+
+test=# select _d_c0('players',4,6);
+ _d_c0 
+-------
+     0
+(1 row)
+
+test=# select _d_rocksdb(4,6);
+ _d_rocksdb 
+------------
+          0
+(1 row)
+
+test=# select _i_v2_dna(4,6,0);
+ _i_v2_dna 
+-----------
+         1
+(1 row)
+
+test=# select _i_v2_dna('players','club_id',4,6);
+ _i_v2_dna 
+-----------
+         1
+(1 row)
+
+
+test=# select _i_v2_dna(4,6,1);
+ _i_v2_dna 
+-----------
+         1
+(1 row)
+
+test=# select _wc_v2_dna('players','club_id',4,6);
+NOTICE:  relation "players_idx" already exists, skipping
+NOTICE:  Executing _w_v2_dna('players','club_id',5):
+ _wc_v2_dna 
+------------
+          0
+(1 row)
+
+postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
+0x0028F08217B06C04 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|5|
+0x0028F08217B06CC0 : Mike Palmer|Hippy|"1988-12-06"|75.5|184|573142800000000|5|
+0x0028F08217B06CD8 : Dorothy Brown|Miss D|"1992-07-12"|64.3|172|574421100000000|5|
+0x0028F08217B06CEA : Linda Chambers|Jamaica|"1987-03-10"|57.7|180|575906400000000|5|
+0x0028F08217B06CFB : Claude Moulin|French|"1944-10-17"|68.1|170|558793800000000|5|
+0x0028F08217B06D0D : Petra Che|Baby|"1989-05-30"|62.3|180|565701600000000|5|
+0x0028F08217B06D1E : Mike Bryan|Joker|"1984-08-21"|80|180|576483900000000|5|
+0x0028F08217B06D2F : Alicia Silver|Checkmate|"1995-09-02"|57.8|168|548931900000000|5|
+0x0028F08217B06D40 : Fernan Ozy|Beast|"1967-12-12"|92.7|177|567965400000000|5|
+0x0028F08217B06D51 : Ivan Lebed|Ruso|"1959-01-10"|77.4|180|575735400000000|5|
+
+
+postgres@quercus:~$ psql test
+psql (10.3)
+Type "help" for help.
+
+test=# select * from v2_dna_5;
+   tab   | rev |        key        |     ancestor      
+---------+-----+-------------------+-------------------
+ players |   1 | 11523440602278916 | 11523440602278916
+ players |   1 | 11523440602279104 | 11523440602279104
+ players |   1 | 11523440602279128 | 11523440602279128
+ players |   1 | 11523440602279146 | 11523440602279146
+ players |   1 | 11523440602279163 | 11523440602279163
+ players |   1 | 11523440602279181 | 11523440602279181
+ players |   1 | 11523440602279198 | 11523440602279198
+ players |   1 | 11523440602279215 | 11523440602279215
+ players |   1 | 11523440602279232 | 11523440602279232
+ players |   1 | 11523440602279249 | 11523440602279249
+(10 rows)
+
+test=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
+      hex_key       
+--------------------
+ 0x0028f08217b06c04
+ 0x0028f08217b06cc0
+ 0x0028f08217b06cd8
+ 0x0028f08217b06cea
+ 0x0028f08217b06cfb
+ 0x0028f08217b06d0d
+ 0x0028f08217b06d1e
+ 0x0028f08217b06d2f
+ 0x0028f08217b06d40
+ 0x0028f08217b06d51
+(10 rows)
+
+
+
+test=# select _p_c0('players',4,6,1);
+NOTICE:  Executing _checkout_c0('players',5,1):
+NOTICE:  table "players_c0_5" does not exist, skipping
+ _p_c0 
+-------
+     0
+(1 row)
+
+
+test=# select * from players_c0_5;
+        key        |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+----------------+-----------+------------+--------+--------+---------------------
+ 11523440602278916 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11523440602279104 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11523440602279128 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11523440602279146 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11523440602279163 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11523440602279181 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11523440602279198 | Mike Bryan     | Joker     | 1984-08-21 |     80 |    180 | 2018-04-08 06:25:00
+ 11523440602279215 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+(10 rows)
+
+
+test=# update players_c0_5 set weight=80.2 where name = 'Mike Bryan';
+NOTICE:  table "tmp" does not exist, skipping
+UPDATE 1
+test=# select * from v2_dna_5;
+   tab   | rev |        key        |     ancestor      
+---------+-----+-------------------+-------------------
+ players |   1 | 11523440602278916 | 11523440602278916
+ players |   1 | 11523440602279104 | 11523440602279104
+ players |   1 | 11523440602279128 | 11523440602279128
+ players |   1 | 11523440602279146 | 11523440602279146
+ players |   1 | 11523440602279163 | 11523440602279163
+ players |   1 | 11523440602279181 | 11523440602279181
+ players |   1 | 11523440602279215 | 11523440602279215
+ players |   1 | 11523440602279232 | 11523440602279232
+ players |   1 | 11523440602279249 | 11523440602279249
+ players |   2 | 11523440812685302 | 11523440602279198
+ players |  -1 | 11523440602279198 | 11523440602279198
+(11 rows)
+
+test=# update players_c0_5 set height=181 where name = 'Mike Bryan';
+NOTICE:  table "tmp" does not exist, skipping
+UPDATE 1
+test=# select * from v2_dna_5;
+   tab   | rev |        key        |     ancestor      
+---------+-----+-------------------+-------------------
+ players |   1 | 11523440602278916 | 11523440602278916
+ players |   1 | 11523440602279104 | 11523440602279104
+ players |   1 | 11523440602279128 | 11523440602279128
+ players |   1 | 11523440602279146 | 11523440602279146
+ players |   1 | 11523440602279163 | 11523440602279163
+ players |   1 | 11523440602279181 | 11523440602279181
+ players |   1 | 11523440602279215 | 11523440602279215
+ players |   1 | 11523440602279232 | 11523440602279232
+ players |   1 | 11523440602279249 | 11523440602279249
+ players |  -1 | 11523440602279198 | 11523440602279198
+ players |   3 | 11523440850187058 | 11523440602279198
+ players |  -2 | 11523440812685302 | 11523440602279198
+(12 rows)
+
+test=# delete from players_c0_5 where name = 'Mike Bryan';
+DELETE 1
+
+test=# select *,'0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
+   tab   | rev |        key        |     ancestor      |      hex_key       
+---------+-----+-------------------+-------------------+--------------------
+ players |   1 | 11523440602278916 | 11523440602278916 | 0x0028f08217b06c04
+ players |   1 | 11523440602279104 | 11523440602279104 | 0x0028f08217b06cc0
+ players |   1 | 11523440602279128 | 11523440602279128 | 0x0028f08217b06cd8
+ players |   1 | 11523440602279146 | 11523440602279146 | 0x0028f08217b06cea
+ players |   1 | 11523440602279163 | 11523440602279163 | 0x0028f08217b06cfb
+ players |   1 | 11523440602279181 | 11523440602279181 | 0x0028f08217b06d0d
+ players |   1 | 11523440602279215 | 11523440602279215 | 0x0028f08217b06d2f
+ players |   1 | 11523440602279232 | 11523440602279232 | 0x0028f08217b06d40
+ players |   1 | 11523440602279249 | 11523440602279249 | 0x0028f08217b06d51
+ players |  -1 | 11523440602279198 | 11523440602279198 | 0x0028f08217b06d1e
+ players |  -2 | 11523440812685302 | 11523440602279198 | 0x0028f082243af7f6
+ players |   0 | 11523440887503450 | 11523440602279198 | 0x0028f08228b09a5a
+ players |  -3 | 11523440850187058 | 11523440602279198 | 0x0028f08226773332
+(13 rows)
+
+
+postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
+0x0028F08217B06C04 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|5|
+0x0028F08217B06CC0 : Mike Palmer|Hippy|"1988-12-06"|75.5|184|573142800000000|5|
+0x0028F08217B06CD8 : Dorothy Brown|Miss D|"1992-07-12"|64.3|172|574421100000000|5|
+0x0028F08217B06CEA : Linda Chambers|Jamaica|"1987-03-10"|57.7|180|575906400000000|5|
+0x0028F08217B06CFB : Claude Moulin|French|"1944-10-17"|68.1|170|558793800000000|5|
+0x0028F08217B06D0D : Petra Che|Baby|"1989-05-30"|62.3|180|565701600000000|5|
+0x0028F08217B06D1E : Mike Bryan|Joker|"1984-08-21"|80|180|576483900000000|5|
+0x0028F08217B06D2F : Alicia Silver|Checkmate|"1995-09-02"|57.8|168|548931900000000|5|
+0x0028F08217B06D40 : Fernan Ozy|Beast|"1967-12-12"|92.7|177|567965400000000|5|
+0x0028F08217B06D51 : Ivan Lebed|Ruso|"1959-01-10"|77.4|180|575735400000000|5|
+0x0028F082243AF7F6 : Mike Bryan|Joker|"1984-08-21"|80.2|180|576483900000000|
+0x0028F08226773332 : Mike Bryan|Joker|"1984-08-21"|80.2|181|576483900000000|
+
+
+test=# select to_timestamp(1523440812.685302);
+         to_timestamp          
+-------------------------------
+ 2018-04-11 13:00:12.685302+03
+(1 row)
+
+test=# select to_timestamp(1523440850.187058);
+         to_timestamp          
+-------------------------------
+ 2018-04-11 13:00:50.187058+03
+(1 row)
+
+
+test=# select max(abs(rev)),min(abs(rev)),ancestor from v2_dna_5 where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz '2018-04-11 13:00:30')*1000000 group by ancestor;
+ max | min |     ancestor      
+-----+-----+-------------------
+   1 |   1 | 11523440602279181
+   1 |   1 | 11523440602279249
+   1 |   1 | 11523440602279128
+   1 |   1 | 11523440602279104
+   1 |   1 | 11523440602278916
+   1 |   1 | 11523440602279163
+   1 |   1 | 11523440602279215
+   1 |   1 | 11523440602279146
+   2 |   1 | 11523440602279198
+   1 |   1 | 11523440602279232
+(10 rows)
+
+test=# select _rewind_c0('players',5,'2018-04-11 13:00:00');
+ _rewind_c0 
+------------
+          0
+(1 row)
+
+test=# select * from players_c0_5;
+        key        |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+----------------+-----------+------------+--------+--------+---------------------
+ 11523440602278916 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11523440602279104 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11523440602279128 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11523440602279146 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11523440602279163 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11523440602279181 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11523440602279198 | Mike Bryan     | Joker     | 1984-08-21 |     80 |    180 | 2018-04-08 06:25:00
+ 11523440602279215 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+(10 rows)
+
+test=# select _rewind_c0('players',5,'2018-04-11 13:00:30');
+ _rewind_c0 
+------------
+          0
+(1 row)
+
+test=# select * from players_c0_5;
+        key        |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+----------------+-----------+------------+--------+--------+---------------------
+ 11523440602278916 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11523440602279104 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11523440602279128 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11523440602279146 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11523440602279163 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11523440602279181 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11523440602279215 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11523440812685302 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    180 | 2018-04-08 06:25:00
+(10 rows)
+
+test=# select _rewind_c0('players',5,'2018-04-11 13:01');
+ _rewind_c0 
+------------
+          0
+(1 row)
+
+test=# select * from players_c0_5;
+        key        |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+----------------+-----------+------------+--------+--------+---------------------
+ 11523440602278916 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11523440602279104 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11523440602279128 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11523440602279146 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11523440602279163 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11523440602279181 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11523440602279215 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11523440850187058 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    181 | 2018-04-08 06:25:00
+(10 rows)
+
+test=# select _rewind_c0('players',5,'2018-04-11 13:01:30');
+ _rewind_c0 
+------------
+          0
+(1 row)
+
+test=# select * from players_c0_5;
+        key        |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+----------------+-----------+------------+--------+--------+---------------------
+ 11523440602278916 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11523440602279104 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11523440602279128 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11523440602279146 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11523440602279163 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11523440602279181 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11523440602279215 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+(9 rows)
+
+test=# 
