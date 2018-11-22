@@ -1,4 +1,5 @@
 -----------------------------------------------------------------------------------------------------------------
+-- deletes from RocksDB stores number in ('min'$2,'max'$3) data related by 'tab'$1
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _d_tab_rocks_v2(text,int,int)
 RETURNS integer AS $$
@@ -10,21 +11,21 @@ BEGIN
 FOR r IN
 EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
 int',$2,$3)
-    LOOP
-    
-FOR j IN EXECUTE format('select key from v2_dna_%s where tab = ''%s''',  r, $1) 
-LOOP
-EXECUTE format('select rocks_delete(%s,%s)',r,j);
-END LOOP;
-EXECUTE format('select rocks_close()');
-EXECUTE format('delete from v2_dna_%s where tab = ''%s''',  r, $1);
-RAISE NOTICE 'done for db %', r;
-    END LOOP;
+	LOOP    
+	FOR j IN EXECUTE format('select key from v2_dna_%s where tab = ''%s''',  r, $1) 
+		LOOP
+			EXECUTE format('select rocks_delete(%s,%s)',r,j);
+		END LOOP;		
+		EXECUTE format('select rocks_close()');
+		EXECUTE format('delete from v2_dna_%s where tab = ''%s''',  r, $1);
+		RAISE NOTICE 'done for db %', r;
+    	END LOOP;
 RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
------------------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------
+-- destroys RocksDB stores number in ('min'$1,'max'$2) based on existing v2_dna; ==> DO NOT DELETE v2_dna manually, use "select _i_v2_dna(int,int,0)"
+----------------------------------------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _d_rocksdb(int,int)
 RETURNS integer AS $$
 DECLARE 
@@ -41,6 +42,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- drops C0 cache tables based on 'tab'$1, min$2, max$2
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _d_c0(text, int,int)
 RETURNS integer AS $$
@@ -59,6 +61,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- initializes v2_dna tables based on tab$1, col$2, min$3, max$4
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _i_v2_dna(text,text,int,int)
 RETURNS integer AS $$
@@ -76,6 +79,7 @@ resultCount = resultCount + 1;
 return resultCount;
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- namesake _i_v2_dna drops (flag == 0) or re-creates (flag == 1) empty v2_dna based on min$1, max$2, flag$3
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _i_v2_dna(int,int,int)
 RETURNS integer AS $$
@@ -102,6 +106,7 @@ resultCount = resultCount + 1;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- workhorse of its namesake _w_v2_dna with more params
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _w_v2_dna(text, text, int)
 RETURNS integer AS $$
@@ -122,6 +127,7 @@ EXECUTE format('select rocks_close()');
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- writer to RocksDB based on 'tab'$1, 'col'$2, min$3, max$4 ==> CREATE INDEX on 'tab' ('col') manually before the run!
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _wc_v2_dna(text,text,int,int)
 returns integer AS $_wc_v2_dna$
@@ -130,7 +136,7 @@ resultCount integer := 0;
 r int := $3+1;
 BEGIN
 
-EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2);
+-- EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2);
 EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s where %s = %s',$1,$2,r);
 EXECUTE format('CREATE TEMP TABLE v2_dna_tmp (tab text, rev int, key bigint, ancestor bigint) on commit drop');
 
@@ -231,13 +237,14 @@ END IF;
 END;$_w_new_row$ LANGUAGE plpgsql;
 
 -----------------------------------------------------------------------------------------------------------------
+-- workhorse of _p_c0
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _checkout_c0(text,int,int)
 RETURNS integer AS $$
 
 BEGIN
 
-if ($1 = 'players') then
+if ($1 = 'players' or $1 = 'p') then
 
 else 
 RETURN -1;
@@ -252,6 +259,17 @@ if $1 = 'players' then
 EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
 from v2_dna_%s, rocks_csv_to_record(%s,v2_dna_%s.key) 
 d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where v2_dna_%s.rev  > 0 and v2_dna_%s.tab = ''%s''',$1,$2,$2,$2,$2,$2,$2,$1);
+
+elsif $1 = 'p' then
+
+EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
+from v2_dna_%s, rocks_csv_to_record(%s,v2_dna_%s.key) 
+d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
+oav oid, kia int, kib int, kbb smallint, odb date, 
+obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
+obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
+oda timestamp, k2d smallint, ode timestamp, k2a smallint
 ) where v2_dna_%s.rev  > 0 and v2_dna_%s.tab = ''%s''',$1,$2,$2,$2,$2,$2,$2,$1);
 
 end if;
@@ -270,13 +288,14 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- used by data rewind mechanism (see example at the bottom of page)
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _rewind_c0(text,int,timestamptz)
 RETURNS integer AS $$
 
 BEGIN
 
-if ($1 = 'players') then
+if ($1 = 'players' or $1 = 'p') then
 
 else 
 RETURN -1;
@@ -291,6 +310,17 @@ if $1 = 'players' then
 EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
 from v2_dna_%s, tmp, rocks_csv_to_record(%s,v2_dna_%s.key) 
 d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where abs(v2_dna_%s.rev) = tmp.max and tmp.min != 0 and v2_dna_%s.ancestor = tmp.ancestor',$1,$2,$2,$2,$2,$2,$2);
+
+elsif $1 = 'p' then
+
+EXECUTE format('create unlogged table if not exists %s_c0_%s with oids as select key, d.*  
+from v2_dna_%s, tmp, rocks_csv_to_record(%s,v2_dna_%s.key) 
+d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
+oav oid, kia int, kib int, kbb smallint, odb date, 
+obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
+obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
+oda timestamp, k2d smallint, ode timestamp, k2a smallint
 ) where abs(v2_dna_%s.rev) = tmp.max and tmp.min != 0 and v2_dna_%s.ancestor = tmp.ancestor',$1,$2,$2,$2,$2,$2,$2);
 
 end if;
@@ -309,6 +339,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- used to sync data between nodes
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _atomic_c0(text,int,bigint)
 
@@ -316,7 +347,7 @@ RETURNS integer AS $$
 
 BEGIN
 
-if ($1 = 'players') then
+if ($1 = 'players' or $1 = 'p') then
 
 else 
 	RETURN -1;
@@ -332,6 +363,18 @@ d(name text, aka text, dob date, weight float, height int, last_seen timestamp
 ) where v2_dna_%s.key = %s',$3,$2,$2,$3,$2,$3);
 EXECUTE format('insert into %s_c0_%s select * from tmp',$1,$2);
 
+elsif $1 = 'p' then
+
+EXECUTE format('create temp table tmp on commit drop as select %s, d.*  
+from v2_dna_%s, rocks_csv_to_record(%s,%s)
+d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
+oav oid, kia int, kib int, kbb smallint, odb date, 
+obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
+obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
+oda timestamp, k2d smallint, ode timestamp, k2a smallint
+) where v2_dna_%s.key = %s',$3,$2,$2,$3,$2,$3);
+EXECUTE format('insert into %s_c0_%s select * from tmp',$1,$2);
+
 end if;
 
 EXECUTE format('select rocks_close()');
@@ -339,8 +382,9 @@ EXECUTE format('select rocks_close()');
 RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
------------------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------
+-- wrapper for _checkout_c0; checks out from RocksDB into C0 cache data related by 'tab'$1, min$2, max$3, flag$4 == 1
+--------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _p_c0(text,int,int,int)
 returns integer AS $$
 DECLARE 
@@ -399,11 +443,15 @@ test=# select _d_rocksdb(4,6);
           0
 (1 row)
 
+-- drop v2_dna_5 if exists
+
 test=# select _i_v2_dna(4,6,0);
  _i_v2_dna 
 -----------
          1
 (1 row)
+
+-- initialize new v2_dna_5
 
 test=# select _i_v2_dna('players','club_id',4,6);
  _i_v2_dna 
@@ -411,6 +459,7 @@ test=# select _i_v2_dna('players','club_id',4,6);
          1
 (1 row)
 
+-- one more time drop/create v1_dna_5 for God's sake
 
 test=# select _i_v2_dna(4,6,1);
  _i_v2_dna 
@@ -418,8 +467,8 @@ test=# select _i_v2_dna(4,6,1);
          1
 (1 row)
 
+
 test=# select _wc_v2_dna('players','club_id',4,6);
-NOTICE:  relation "players_idx" already exists, skipping
 NOTICE:  Executing _w_v2_dna('players','club_id',5):
  _wc_v2_dna 
 ------------
@@ -458,6 +507,8 @@ test=# select * from v2_dna_5;
  players |   1 | 11523440602279249 | 11523440602279249
 (10 rows)
 
+-- if we want to search the stored value by key, we'll need this
+
 test=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
       hex_key       
 --------------------
@@ -473,7 +524,7 @@ test=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
  0x0028f08217b06d51
 (10 rows)
 
-
+--checking out new cache from RocksDB store #5
 
 test=# select _p_c0('players',4,6,1);
 NOTICE:  Executing _checkout_c0('players',5,1):
@@ -483,6 +534,7 @@ NOTICE:  table "players_c0_5" does not exist, skipping
      0
 (1 row)
 
+-- check the cache, now with keys
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -499,6 +551,7 @@ test=# select * from players_c0_5;
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
 
+-- make some changes
 
 test=# update players_c0_5 set weight=80.2 where name = 'Mike Bryan';
 NOTICE:  table "tmp" does not exist, skipping
@@ -588,6 +641,7 @@ test=# select to_timestamp(1523440850.187058);
  2018-04-11 13:00:50.187058+03
 (1 row)
 
+-- see how it works in code for rewind
 
 test=# select max(abs(rev)),min(abs(rev)),ancestor from v2_dna_5 where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz '2018-04-11 13:00:30')*1000000 group by ancestor;
  max | min |     ancestor      
@@ -610,6 +664,8 @@ test=# select _rewind_c0('players',5,'2018-04-11 13:00:00');
           0
 (1 row)
 
+-- now Mike Bryan is back and unchanged
+
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
 -------------------+----------------+-----------+------------+--------+--------+---------------------
@@ -624,6 +680,8 @@ test=# select * from players_c0_5;
  11523440602279232 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
+
+-- now he is back but with the first of two changes
 
 test=# select _rewind_c0('players',5,'2018-04-11 13:00:30');
  _rewind_c0 
@@ -652,6 +710,8 @@ test=# select _rewind_c0('players',5,'2018-04-11 13:01');
           0
 (1 row)
 
+-- now back to both changes for Mike
+
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
 -------------------+----------------+-----------+------------+--------+--------+---------------------
@@ -667,7 +727,9 @@ test=# select * from players_c0_5;
  11523440850187058 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    181 | 2018-04-08 06:25:00
 (10 rows)
 
-test=# select _rewind_c0('players',5,'2018-04-11 13:01:30');
+-- back to future which is now :) no Mike again
+
+test=# select _rewind_c0('players',5, now());
  _rewind_c0 
 ------------
           0
