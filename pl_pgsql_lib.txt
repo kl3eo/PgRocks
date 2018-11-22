@@ -459,7 +459,7 @@ test=# select _i_v2_dna('players','club_id',4,6);
          1
 (1 row)
 
--- one more time drop/create v1_dna_5 for God's sake
+-- one more time drop/create v2_dna_5
 
 test=# select _i_v2_dna(4,6,1);
  _i_v2_dna 
@@ -551,7 +551,7 @@ test=# select * from players_c0_5;
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
 
--- make some changes
+-- make some changes to Mike
 
 test=# update players_c0_5 set weight=80.2 where name = 'Mike Bryan';
 NOTICE:  table "tmp" does not exist, skipping
@@ -591,6 +591,8 @@ test=# select * from v2_dna_5;
  players |   3 | 11523440850187058 | 11523440602279198
  players |  -2 | 11523440812685302 | 11523440602279198
 (12 rows)
+
+-- drop Mike from the club 
 
 test=# delete from players_c0_5 where name = 'Mike Bryan';
 DELETE 1
@@ -664,7 +666,7 @@ test=# select _rewind_c0('players',5,'2018-04-11 13:00:00');
           0
 (1 row)
 
--- now Mike Bryan is back and unchanged
+-- now Mike is back and unchanged
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -681,7 +683,7 @@ test=# select * from players_c0_5;
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
 
--- now he is back but with the first of two changes
+-- now he is back but with the first of those two changes
 
 test=# select _rewind_c0('players',5,'2018-04-11 13:00:30');
  _rewind_c0 
