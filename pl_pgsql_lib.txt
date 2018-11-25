@@ -1,5 +1,9 @@
+LIB V2
+======
+-- NB: consider removing 'tab' field from v2 DNA table as one hardly uses a single v2_dna for many tables; therefore in v3 the parent table name is prefixed to v3_dna. It saves a lot of space.
+
 -----------------------------------------------------------------------------------------------------------------
--- deletes from RocksDB stores number in ('min'$2,'max'$3) data related by 'tab'$1
+-- deletes from RocksDB stores in ('min'$2,'max'$3) all data related by 'tab'$1
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _d_tab_rocks_v2(text,int,int)
 RETURNS integer AS $$
@@ -24,12 +28,11 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 ----------------------------------------------------------------------------------------------------------------------------------------------------
--- destroys RocksDB stores number in ('min'$1,'max'$2) based on existing v2_dna; ==> DO NOT DELETE v2_dna manually, use "select _i_v2_dna(int,int,0)"
+-- destroys RocksDB stores number in ('min'$1,'max'$2) based on existing v2_dna; ==> DO NOT DELETE v2_dna manually, use "select _i_v2_dna(min,max,0)"
 ----------------------------------------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _d_rocksdb(int,int)
 RETURNS integer AS $$
 DECLARE 
-
 r int;
 BEGIN
 
@@ -42,12 +45,11 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
--- drops C0 cache tables based on 'tab'$1, min$2, max$2
+-- drops C0 cache shards based on 'tab'$1, min$2, max$2
 -----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION _d_c0(text, int,int)
+CREATE OR REPLACE FUNCTION _d_c0(text,int,int)
 RETURNS integer AS $$
 DECLARE 
-
 r int;
 BEGIN
 
@@ -72,7 +74,7 @@ BEGIN
 
 FOR r IN EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
     LOOP
-EXECUTE format('create table v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
+EXECUTE format('create table if not exists v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
 resultCount = resultCount + 1;
     END LOOP;
    
@@ -84,7 +86,6 @@ END;$$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION _i_v2_dna(int,int,int)
 RETURNS integer AS $$
 DECLARE 
-
 r integer := 0;
 resultCount integer := 0;
 
@@ -95,24 +96,79 @@ FOR r IN
 EXECUTE format('SELECT split_part(table_name,''_'',3)::int FROM information_schema.tables WHERE table_name ~ ''v2_dna_'' and split_part(table_name,''_'',3)::int > %s and split_part(table_name,''_'',3)::int < %s order by split_part(table_name,''_'',3)::
 int',$1,$2)
     LOOP
-EXECUTE format('drop table if exists v2_dna_%s', r);
-if $3 = 1 then 
-EXECUTE format('create table v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
-end if;
-resultCount = resultCount + 1;
+	EXECUTE format('drop table if exists v2_dna_%s', r);
+	if $3 = 1 then 
+		EXECUTE format('create table v2_dna_%s (tab text, rev int, key bigint, ancestor bigint)', r);
+	end if;
+	resultCount = resultCount + 1;
     END LOOP;
    
     return resultCount;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
--- workhorse of its namesake _w_v2_dna with more params
+-- workhorse of _ec_v2_dna with partly emptying original table$1, col$2 equal to $3, limit$4, offset $5 good for parallel
 -----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION _w_v2_dna(text, text, int)
+
+CREATE OR REPLACE FUNCTION _e_v2_dna(text, text, int, int, int)
 RETURNS integer AS $$
 DECLARE 
 
     resultCount integer := 0;
+
+BEGIN
+EXECUTE format('truncate tmp');
+EXECUTE format('truncate v2_dna_tmp');
+EXECUTE format('WITH moved_rows AS (
+DELETE FROM %s a
+WHERE ctid  = ANY(ARRAY(
+SELECT ctid
+FROM %s
+WHERE %s=%s
+order by ctid  
+LIMIT %s OFFSET %s
+))
+    RETURNING a.*
+) insert into tmp select * from moved_rows;',$1,$1,$2,$3,$4,$5);
+EXECUTE format('insert into v2_dna_tmp (tab, rev, key) select ''%s'',1,row_to_csv_rocks(%s,tmp) from tmp',$1,$3);
+EXECUTE format('update v2_dna_tmp set ancestor=key');
+EXECUTE format('insert into v2_dna_%s select * from v2_dna_tmp',$3);
+EXECUTE format('select rocks_close()');
+
+    return resultCount;
+
+END;$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-- writer to RocksDB based on 'tab'$1, 'col'$2, min$3, max$4, limit$5, offset$6 ==> CREATE INDEX on 'tab' ('col') manually before the run!
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _ec_v2_dna(text,text,int,int,int,int)
+returns integer AS $_ec_v2_dna$
+DECLARE 
+resultCount integer := 0;
+r int := $3+1;
+BEGIN
+
+-- EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2); -- better do it manually before the first run
+EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s limit 0',$1);
+EXECUTE format('CREATE TEMP TABLE v2_dna_tmp (tab text, rev int, key bigint, ancestor bigint) on commit drop');
+
+FOR r IN
+EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
+    LOOP
+RAISE NOTICE 'Executing _e_v2_dna(''%'',''%'',%, %, %):', $1, $2, r, $5, $6;
+EXECUTE format('select _e_v2_dna(''%s'',''%s'',%s, %s, %s)',$1, $2, r, $5, $6) into resultCount;
+
+    END LOOP;
+RETURN resultCount;
+
+END;$_ec_v2_dna$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------------------------------------
+-- workhorse of _wc_v2_dna
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _w_v2_dna(text, text, int)
+RETURNS integer AS $$
+DECLARE 
+resultCount integer := 0;
 
 BEGIN
 EXECUTE format('truncate tmp');
@@ -123,7 +179,7 @@ EXECUTE format('update v2_dna_tmp set ancestor=key');
 EXECUTE format('insert into v2_dna_%s select * from v2_dna_tmp',$3);
 EXECUTE format('select rocks_close()');
 
-    return resultCount;
+RETURN resultCount;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
@@ -136,21 +192,21 @@ resultCount integer := 0;
 r int := $3+1;
 BEGIN
 
--- EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2);
-EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s where %s = %s',$1,$2,r);
+-- EXECUTE format('create index if not exists %s_idx on %s (%s)',$1,$1,$2); -- better do it manually before the first run
+EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s limit 0',$1);
 EXECUTE format('CREATE TEMP TABLE v2_dna_tmp (tab text, rev int, key bigint, ancestor bigint) on commit drop');
 
-FOR r IN
-EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
+FOR r IN EXECUTE format('SELECT distinct %s FROM %s where %s > %s and %s < %s order by %s',$2,$1,$2,$3,$2,$4,$2)
     LOOP
-RAISE NOTICE 'Executing _w_v2_dna(''%'',''%'',%):', $1, $2, r;
-EXECUTE format('select _w_v2_dna(''%s'',''%s'',%s)',$1, $2, r) into resultCount;
+	RAISE NOTICE 'Executing _w_v2_dna(''%'',''%'',%):', $1, $2, r;
+	EXECUTE format('select _w_v2_dna(''%s'',''%s'',%s)',$1, $2, r) into resultCount;
 
     END LOOP;
 RETURN resultCount;
 
 END;$_wc_v2_dna$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- trigger function used in checkout and rewind
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _w_new_row()
 returns trigger AS $_w_new_row$
@@ -288,7 +344,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
--- used by data rewind mechanism (see example at the bottom of page)
+-- used by data rewind mechanism (see examples)
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _rewind_c0(text,int,timestamptz)
 RETURNS integer AS $$
@@ -339,7 +395,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
--- used to sync data between nodes
+-- used to insert external data to local cache
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _atomic_c0(text,int,bigint)
 
@@ -383,7 +439,7 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 --------------------------------------------------------------------------------------------------------------------
--- wrapper for _checkout_c0; checks out from RocksDB into C0 cache data related by 'tab'$1, min$2, max$3, flag$4 == 1
+-- wrapper for _checkout_c0; checks out from RocksDB only data related by 'tab'$1, min$2, max$3, flag$4 == 1
 --------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _p_c0(text,int,int,int)
 returns integer AS $$
@@ -403,8 +459,20 @@ RETURN 0;
 
 END;$$ LANGUAGE plpgsql;
 -----------------------------------------------------------------------------------------------------------------
+-- END LIB V2
 -----------------------------------------------------------------------------------------------------------------
 
+EXAMPLES
+========
+
+create table players(name text, aka text, dob date, weight float, height int, last_seen timestamp); 
+
+
+insert into players values ('Peter Stevens','Boss', '1956-06-30', 85.4,169,'2017-10-25 17:30');
+insert into players values ('Mike Palmer','Hippy', '1988-12-06', 75.5,184,'2018-02-28 14:20');
+insert into players values ('Dorothy Brown','Miss D', '1992-07-12', 64.3,172,'2018-03-15 09:25');
+insert into players values ('Linda Chambers','Jamaica', '1987-03-10', 57.7,180,'2018-04-01 14:00');
+insert into players values ('Claude Moulin','French', '1944-10-17', 68.1,170,'2017-09-15 12:30');
 
 insert into players values ('Petra Che','Baby', '1989-05-30', 62.3,180,'2017-12-04 11:20');
 insert into players values ('Mike Bryan','Joker', '1984-08-21', 80.0,180,'2018-04-08 06:25');
@@ -431,11 +499,17 @@ test=# select * from players where club_id = 5;
  Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00 |       5
 (10 rows)
 
+
+-- cleanup old 'players_c0_5' cache shard
+
 test=# select _d_c0('players',4,6);
  _d_c0 
 -------
      0
 (1 row)
+
+
+-- drop old RocksDB store#5
 
 test=# select _d_rocksdb(4,6);
  _d_rocksdb 
@@ -443,7 +517,8 @@ test=# select _d_rocksdb(4,6);
           0
 (1 row)
 
--- drop v2_dna_5 if exists
+
+-- drop old v2_dna_5 if exists
 
 test=# select _i_v2_dna(4,6,0);
  _i_v2_dna 
@@ -451,7 +526,8 @@ test=# select _i_v2_dna(4,6,0);
          1
 (1 row)
 
--- initialize new v2_dna_5
+
+-- initialize new v2_dna_5 with 4 params
 
 test=# select _i_v2_dna('players','club_id',4,6);
  _i_v2_dna 
@@ -459,7 +535,8 @@ test=# select _i_v2_dna('players','club_id',4,6);
          1
 (1 row)
 
--- one more time drop/create v2_dna_5
+
+-- one more time drop/create v2_dna_5 - this time with function using three params
 
 test=# select _i_v2_dna(4,6,1);
  _i_v2_dna 
@@ -468,12 +545,17 @@ test=# select _i_v2_dna(4,6,1);
 (1 row)
 
 
+-- writing data actually into RocksDB store#5 and to v2_dna_5
+
 test=# select _wc_v2_dna('players','club_id',4,6);
 NOTICE:  Executing _w_v2_dna('players','club_id',5):
  _wc_v2_dna 
 ------------
           0
 (1 row)
+
+
+-- checking the RocksDB store#5 for our records
 
 postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
 0x0028F08217B06C04 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|5|
@@ -487,10 +569,6 @@ postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
 0x0028F08217B06D40 : Fernan Ozy|Beast|"1967-12-12"|92.7|177|567965400000000|5|
 0x0028F08217B06D51 : Ivan Lebed|Ruso|"1959-01-10"|77.4|180|575735400000000|5|
 
-
-postgres@quercus:~$ psql test
-psql (10.3)
-Type "help" for help.
 
 test=# select * from v2_dna_5;
    tab   | rev |        key        |     ancestor      
@@ -507,7 +585,8 @@ test=# select * from v2_dna_5;
  players |   1 | 11523440602279249 | 11523440602279249
 (10 rows)
 
--- if we want to search the stored value by key, we'll need this
+
+-- if we want to search the stored value by key in the RocksDB store, we'll need this
 
 test=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
       hex_key       
@@ -524,7 +603,8 @@ test=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
  0x0028f08217b06d51
 (10 rows)
 
---checking out new cache from RocksDB store #5
+
+-- creating new c0 cache from RocksDB store#5
 
 test=# select _p_c0('players',4,6,1);
 NOTICE:  Executing _checkout_c0('players',5,1):
@@ -534,7 +614,8 @@ NOTICE:  table "players_c0_5" does not exist, skipping
      0
 (1 row)
 
--- check the cache, now with keys
+
+-- check our shard, now with keys
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -551,7 +632,8 @@ test=# select * from players_c0_5;
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
 
--- make some changes to Mike
+
+-- we make some changes to Mike here
 
 test=# update players_c0_5 set weight=80.2 where name = 'Mike Bryan';
 NOTICE:  table "tmp" does not exist, skipping
@@ -571,6 +653,9 @@ test=# select * from v2_dna_5;
  players |   2 | 11523440812685302 | 11523440602279198
  players |  -1 | 11523440602279198 | 11523440602279198
 (11 rows)
+
+
+-- more changes
 
 test=# update players_c0_5 set height=181 where name = 'Mike Bryan';
 NOTICE:  table "tmp" does not exist, skipping
@@ -592,7 +677,8 @@ test=# select * from v2_dna_5;
  players |  -2 | 11523440812685302 | 11523440602279198
 (12 rows)
 
--- drop Mike from the club 
+
+-- and finally we drop Mike from the club 
 
 test=# delete from players_c0_5 where name = 'Mike Bryan';
 DELETE 1
@@ -616,6 +702,8 @@ test=# select *,'0x' || LPAD(to_hex(key), 16, '0') as hex_key from v2_dna_5;
 (13 rows)
 
 
+-- checkng what happened to Mike in the store#5
+
 postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
 0x0028F08217B06C04 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|5|
 0x0028F08217B06CC0 : Mike Palmer|Hippy|"1988-12-06"|75.5|184|573142800000000|5|
@@ -631,6 +719,8 @@ postgres@quercus:~$ ldb --db=/tmp/rocksdb_5 scan --key_hex
 0x0028F08226773332 : Mike Bryan|Joker|"1984-08-21"|80.2|181|576483900000000|
 
 
+-- find out the real time of the change events from their keys in v2_dna_5; when events happen, revisions change. The key's first digit is node_number, the rest of the key is unix time in microseconds.
+
 test=# select to_timestamp(1523440812.685302);
          to_timestamp          
 -------------------------------
@@ -643,7 +733,8 @@ test=# select to_timestamp(1523440850.187058);
  2018-04-11 13:00:50.187058+03
 (1 row)
 
--- see how it works in code for rewind
+
+-- illustrates logics from lib2 code for '_rewind_c0'
 
 test=# select max(abs(rev)),min(abs(rev)),ancestor from v2_dna_5 where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz '2018-04-11 13:00:30')*1000000 group by ancestor;
  max | min |     ancestor      
@@ -660,13 +751,17 @@ test=# select max(abs(rev)),min(abs(rev)),ancestor from v2_dna_5 where right(key
    1 |   1 | 11523440602279232
 (10 rows)
 
+
+-- here we start rewinding data
+
 test=# select _rewind_c0('players',5,'2018-04-11 13:00:00');
  _rewind_c0 
 ------------
           0
 (1 row)
 
--- now Mike is back and unchanged
+
+-- now Mike is back in club and unchanged
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -683,13 +778,18 @@ test=# select * from players_c0_5;
  11523440602279249 | Ivan Lebed     | Ruso      | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
 (10 rows)
 
--- now he is back but with the first of those two changes
+
+-- more rewind 
 
 test=# select _rewind_c0('players',5,'2018-04-11 13:00:30');
  _rewind_c0 
 ------------
           0
 (1 row)
+
+
+-- now he is not out yet but with the first of those two changes
+
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -706,13 +806,17 @@ test=# select * from players_c0_5;
  11523440812685302 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    180 | 2018-04-08 06:25:00
 (10 rows)
 
+
+-- more rewind
+
 test=# select _rewind_c0('players',5,'2018-04-11 13:01');
  _rewind_c0 
 ------------
           0
 (1 row)
 
--- now back to both changes for Mike
+
+-- now back to time with both changes for Mike
 
 test=# select * from players_c0_5;
         key        |      name      |    aka    |    dob     | weight | height |      last_seen      
@@ -729,7 +833,8 @@ test=# select * from players_c0_5;
  11523440850187058 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    181 | 2018-04-08 06:25:00
 (10 rows)
 
--- back to future which is now :) no Mike again
+
+-- going back to future which is now :) no Mike
 
 test=# select _rewind_c0('players',5, now());
  _rewind_c0 
