@@ -223,7 +223,18 @@ BEGIN
 IF (TG_OP = 'INSERT') THEN
 
 EXECUTE 'select rocks_get_node_number()' into v;
+
+-- here we strongly depend on that key of the insert has been already formed correctly somewhere as:
+-- select cast( rocks_get_node_number()*10000000000000000+ EXTRACT(EPOCH FROM current_timestamp)*1000000 as bigint);
+-- otherwise catch all sorts of error
+
+IF (floor(NEW.key/10000000000000000) = 0 or NEW.key IS NULL) THEN
+RAISE NOTICE 'BAD KEY(''%''): exiting',NEW.key;
+RETURN NULL;
+END IF;
+
 RAISE NOTICE 'new key(''%''):',NEW.key;
+
 IF (v = floor(NEW.key/10000000000000000)) THEN
 
 drop table if exists tmp;
