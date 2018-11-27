@@ -1,0 +1,172 @@
+CLEANUP
+-------
+
+[postgres@alex6 db_v2]$ /usr/local/pgsql/bin/pg_ctl -D /usr/local/pgsql/data -l logfile restart
+waiting for server to shut down............ done
+server stopped
+waiting for server to start.... done
+server started
+[postgres@alex6 db_v2]$ psql -c "select _d_rocksdb3('p')" people
+ _d_rocksdb3 
+-------------
+           0
+(1 row)
+
+[postgres@alex6 db_v2]$ du /opt/nvme/pgrocks
+4	/opt/nvme/pgrocks
+
+[postgres@alex6 db_v2]$ iostat -m
+Linux 3.10.0-957.el7.x86_64 (alex6.example.com) 	11/27/2018 	_x86_64_	(40 CPU)
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.68    0.00    0.14    0.15    0.00   99.03
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1         125.28         0.45         9.68     350897    7480079
+sda               0.78         0.01         2.03       4009    1567324
+
+
+WRITING (102821244 rows @ total time including table copy and indexing 330 sec ~ 311,500 rows/sec; 141 sec for writing, V = 102821244 / 141 ~ 729k rows/wec)
+-------
+
+[postgres@alex6 db_v2]$ ./writing_16.pl p 102821244
+====
+Tue Nov 27 18:05:18 MSK 2018
+Starting script
+====
+Tue Nov 27 18:05:18 MSK 2018
+(Re)creating clone p_new
+====
+Tue Nov 27 18:05:22 MSK 2018
+Copying clone p_new from parent p
+====
+Tue Nov 27 18:07:49 MSK 2018
+Indexing clone p_new
+====
+Tue Nov 27 18:08:20 MSK 2018
+Creating RocksDB 16 stores
+Here store is 1, rows is 7730920, offset is 0, order is asc!
+Here store is 16, rows is 7730920, offset is 0, order is desc!
+Here store is 2, rows is 7498992, offset is 7730920, order is asc!
+Here store is 15, rows is 7498992, offset is 7730920, order is desc!
+Here store is 3, rows is 6957828, offset is 15229912, order is asc!
+Here store is 14, rows is 6957828, offset is 15229912, order is desc!
+Here store is 4, rows is 6493973, offset is 22187740, order is asc!
+Here store is 13, rows is 6493973, offset is 22187740, order is desc!
+Here store is 5, rows is 6030118, offset is 28681713, order is asc!
+Here store is 12, rows is 6030118, offset is 28681713, order is desc!
+Here store is 6, rows is 5720881, offset is 34711831, order is asc!
+Here store is 11, rows is 5720881, offset is 34711831, order is desc!
+Here store is 7, rows is 5566262, offset is 40432712, order is asc!
+Here store is 10, rows is 5566262, offset is 40432712, order is desc!
+Here store is 9, rows is 5411644, offset is 45998974, order is desc!
+Here store is 8, rows is 5411652, offset is 45998974, order is asc!
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+Finished all runners
+====
+Tue Nov 27 18:10:43 MSK 2018
+Dropping clone p_new
+====
+Tue Nov 27 18:10:48 MSK 2018
+Finished
+
+[postgres@alex6 db_v2]$ cat .err* | grep "Execution Time" | awk {'print $3'}
+141299.268
+141106.568
+139183.665
+137073.468
+133795.109
+131951.117
+131252.066
+127940.279
+141308.392
+139951.431
+139314.613
+136018.199
+132404.973
+130728.094
+125670.618
+121395.271
+
+[postgres@alex6 db_v2]$ psql people
+psql (11.1)
+Type "help" for help.
+
+people=# select count(*) from p_v3_dna;
+   count   
+-----------
+ 102821244
+(1 row)
+
+
+READING (102821244 rows @312 sec ~ 329,500 rows/sec)
+-------
+
+[postgres@alex6 db_v2]$ ./reading_16.pl p 1 && ./reading_16.pl p 0 9
+====
+Tue Nov 27 19:28:54 MSK 2018
+Starting script
+====
+Tue Nov 27 19:28:54 MSK 2018
+Dropping old c0 cache (if exists) p_c0
+====
+Tue Nov 27 19:28:57 MSK 2018
+Creating empty p_c0
+====
+Tue Nov 27 19:28:57 MSK 2018
+Starting parallel readers from 8 RocksDB stores into p_c0
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+Finished all runners
+====
+Tue Nov 27 19:31:30 MSK 2018
+Creating trigger p_c0_biud_v3
+====
+Tue Nov 27 19:31:30 MSK 2018
+Finished
+====
+Tue Nov 27 19:31:30 MSK 2018
+Starting script
+====
+Tue Nov 27 19:31:30 MSK 2018
+Starting parallel readers from 8 RocksDB stores into p_c0
+Finished all runners
+====
+Tue Nov 27 19:34:06 MSK 2018
+Creating trigger p_c0_biud_v3
+====
+Tue Nov 27 19:34:06 MSK 2018
+Finished
+[postgres@alex6 db_v2]$ 
+[postgres@alex6 db_v2]$ psql people
+psql (11.1)
+Type "help" for help.
+
+people=# select count(*) from p_c0;
+   count   
+-----------
+ 102821244
+(1 row)
+
+
+[postgres@alex6 db_v2]$ iostat -m
+Linux 3.10.0-957.el7.x86_64 (alex6.example.com) 	11/27/2018 	_x86_64_	(40 CPU)
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.70    0.00    0.15    0.15    0.00   98.99
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1         134.02         0.51        10.13     398459    7890744
+sda               0.93         0.01         2.04       4530    1586542
