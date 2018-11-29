@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 use strict;
 
+#!!! --DO NOT RUN PSQL WHILE RUNNING THIS SCRIPT - OR IT WILL NOT END-- !!!
+
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
     #print "\nUsage: '$0 <table> <number of ROWS> <(re)create clone = 1/ use old clone = 0>'\n";
@@ -85,6 +87,8 @@ print "Here store is $j, rows is $lim, offset is $sum, order is asc!\n";
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "explain analyze select _e_v3_dna('$tab',$j,$lim,$sum,'asc')" people > .err$j.log 2>&1`;
 
 
+#!!! --DO NOT RUN PSQL FROM ANOTHER CONSOLE WHILE RUNNING THIS SCRIPT - OR THIS LOOP WILL NOT END-- !!!
+
 while (1) {
 sleep(3);
 my $str = `ps aux | grep psql | grep -v grep`;
@@ -96,6 +100,9 @@ if (length($str)) {
 }
 }
 
+# -- HERE SAVING TIME FOR FUTURE
+system("echo ==== >> log && date >> log && echo 'Creating index on v3_dna table' >> log && echo ==== && date && echo 'Creating index on v3_dna table'");
+$c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "create index $tab\_v3_dna_idx on $tab\_v3_dna (key,mark) with (fillfactor=50)" people >> .err0.log 2>&1`;
 
 system("echo ==== >> log && date >> log && echo 'Dropping clone $tab\_new' >> log && echo ==== && date && echo 'Dropping clone $tab\_new'");
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "drop table if exists $tab\_new" people >> .err0.log 2>&1`;

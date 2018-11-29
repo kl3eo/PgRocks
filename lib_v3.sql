@@ -37,6 +37,7 @@ EXECUTE format('drop table if exists %s_v3_dna', $1);
 
 if $2 = 1 then 
 EXECUTE format('create table %s_v3_dna (mark int, rev int, key bigint, ancestor bigint)', $1);
+EXECUTE format('alter table %s_v3_dna add constraint %s_v3_dna_unq unique (key,mark)', $1, $1);
 end if;
   
 RETURN resultCount;
