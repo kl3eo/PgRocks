@@ -5,20 +5,20 @@ var _channel = "v3_dna_update";
 var _joints = {
   A: { client: null,
        config: { 
-                  user: 'alex',
+                  user: 'postgres',
                   host: 'localhost',
-                  database: 'clone',
+                  database: 'people',
                   password: 'xxx',
                   port: 5432
                 }
   },
   B: { client: null,
        config: { 
-                  user: 'alex',
-                  host: '91.188.188.198',
-                  database: 'clone',
+                  user: 'postgres',
+                  host: 'localhost',
+                  database: 'people',
                   password: 'xxx',
-                  port: 5432
+                  port: 9873
                 }
   }
   

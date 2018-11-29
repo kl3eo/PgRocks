@@ -113,7 +113,7 @@ if $1 = 'players' then
 -- d(name text, aka text, dob date, weight float, height int, last_seen timestamp
 -- ) where %s_v3_dna.rev  > 0 and %s_v3_dna.mark = %s',$1,$1,$2,$1,$1,$1,$2);
 
-EXECUTE format('create table %s_c0 (key bigint, name text, aka text, dob date, weight float, height int, last_seen timestamp) with oids',$1);
+EXECUTE format('create table %s_c0 (key bigint, mark int2, name text, aka text, dob date, weight float, height int, last_seen timestamp) with oids',$1);
 
 elsif $1 = 'p' then
 
@@ -126,7 +126,7 @@ elsif $1 = 'p' then
 -- oda timestamp, k2d smallint, ode timestamp, k2a smallint
 -- ) where %s_v3_dna.rev  > 0 and %s_v3_dna.mark = %s',$1,$1,$2,$1,$1,$1,$2);
 
-EXECUTE format('create table %s_c0 (key bigint, occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
+EXECUTE format('create table %s_c0 (key bigint, mark int2, occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
 oav oid, kia int, kib int, kbb smallint, odb date, 
 obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
 obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
@@ -138,14 +138,14 @@ elsif table_exists is true then
 
 if $1 = 'players' then
 
-EXECUTE format('insert into %s_c0 select key, d.*  
+EXECUTE format('insert into %s_c0 select key, mark, d.*  
 from %s_v3_dna, rocks_csv_to_record(%s,%s_v3_dna.key) 
 d(name text, aka text, dob date, weight float, height int, last_seen timestamp
 ) where %s_v3_dna.rev  > 0 and %s_v3_dna.mark = %s',$1,$1,$2,$1,$1,$1,$2);
 
 elsif $1 = 'p' then
 
-EXECUTE format('insert into %s_c0 select key, d.*  
+EXECUTE format('insert into %s_c0 select key, mark, d.*  
 from %s_v3_dna, rocks_csv_to_record(%s,%s_v3_dna.key) 
 d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
 oav oid, kia int, kib int, kbb smallint, odb date, 
@@ -201,12 +201,14 @@ IF (v = floor(NEW.key/10000000000000000)) THEN
 drop table if exists tmp;
 CREATE TEMP TABLE tmp on commit drop as select NEW.*;
 ALTER TABLE tmp drop column key;
+ALTER TABLE tmp drop column mark;
 -- we're ad hoc putting new rec into store=TG_ARGV[1]; we're free to chose one
 EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp',TG_ARGV[1]) into v;
 EXECUTE format('select rocks_close()');
 
 EXECUTE format('select cast(%s as text)',v) into vc;
-payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc) );
+-- payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc,'mark',TG_ARGV[1]) );
+ payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc,'mark',TG_ARGV[1]) );
   perform pg_notify('v3_dna_insert', payload); 
 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values(%s,1,%s,%s)',TG_ARGV[0],TG_ARGV[1],v,v);
@@ -219,14 +221,15 @@ ELSIF (TG_OP = 'UPDATE') THEN
 drop table if exists tmp;
 CREATE TEMP TABLE tmp on commit drop as select NEW.*;
 ALTER TABLE tmp drop column key;
+ALTER TABLE tmp drop column mark;
 
-EXECUTE format('select mark, rev, ancestor::text from %s_v3_dna where key = %s',TG_ARGV[0],NEW.key) into mark_old, rev_old, ancs ;
+EXECUTE format('select mark, rev, ancestor::text from %s_v3_dna where key = %s and mark = %s',TG_ARGV[0],NEW.key,NEW.mark) into mark_old, rev_old, ancs ;
 
 EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp', mark_old) into v;
 EXECUTE format('select rocks_close()');
 
 EXECUTE format('select cast(%s as text)',v) into vc;
-payload := (SELECT mark_old || ',' || json_build_object('tab',TG_ARGV[0],'rev',rev_old+1,'key',vc, 'ancestor', ancs) );
+payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',rev_old+1,'key',vc, 'ancestor', ancs,'mark',mark_old) );
   perform pg_notify('v3_dna_insert', payload);
 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values (%s,%s,%s,%s)',TG_ARGV[0],mark_old,rev_old+1,v,ancs);
@@ -235,20 +238,20 @@ EXECUTE format('select cast(%s as text)',NEW.key) into vc;
 payload := (SELECT TG_ARGV[0] || ',' || json_build_object('rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
 perform pg_notify('v3_dna_update', payload); 
 
-EXECUTE format('update %s_v3_dna set rev = %s where key = %s',TG_ARGV[0],rev_old*(-1),NEW.key);
+EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),NEW.key,NEW.mark);
 
 NEW.key = v;
 RETURN NEW;
 
 ELSIF (TG_OP = 'DELETE') THEN
 
-EXECUTE format('select mark, rev, ancestor::text from %s_v3_dna where key = %s',TG_ARGV[0],OLD.key) into mark_old, rev_old, ancs;
+EXECUTE format('select mark, rev, ancestor::text from %s_v3_dna where key = %s and mark = %s',TG_ARGV[0],OLD.key,OLD.mark) into mark_old, rev_old, ancs;
 
 IF (rev_old > 0) THEN
 EXECUTE 'select cast( rocks_get_node_number()*10000000000000000+ EXTRACT(EPOCH FROM current_timestamp)*1000000 as bigint)' into v;
 EXECUTE format('select cast( %s as text)',v) into vc;
 
-payload := (SELECT mark_old || ',' || json_build_object('tab',TG_ARGV[0],'rev',0,'key',vc,'ancestor', ancs) );
+payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',0,'key',vc,'ancestor', ancs,'mark',mark_old) );
 perform pg_notify('v3_dna_insert', payload); 
 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values(%s,0,%s,%s)',TG_ARGV[0],mark_old,vc,ancs);
@@ -258,7 +261,7 @@ EXECUTE format('select cast(%s as text)',OLD.key) into vc;
 payload := (SELECT TG_ARGV[0] || ',' || json_build_object('rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
 perform pg_notify('v3_dna_update', payload); 
 
-EXECUTE format('update %s_v3_dna set rev = %s where key = %s',TG_ARGV[0],rev_old*(-1),OLD.key);
+EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),OLD.key,OLD.mark);
 
 END IF;
 
@@ -287,22 +290,22 @@ drop table if exists tmp;
 
 if $1 = 'players' then
 
-EXECUTE format('create temp table tmp on commit drop as select %s, d.*  
-from %s_sv3_dna, rocks_csv_to_record(%s,%s)
+EXECUTE format('create temp table tmp on commit drop as select key, mark ,d.*  
+from %s_v3_dna, rocks_csv_to_record(%s,%s)
 d(name text, aka text, dob date, weight float, height int, last_seen timestamp
-) where %s_v3_dna.key = %s',$3,$1,$2,$3,$1,$3);
+) where %s_v3_dna.key = %s and %s_v3_dna.mark = %s',$1,$2,$3,$1,$3,$1,$2);
 EXECUTE format('insert into %s_c0 select * from tmp',$1);
 
 elsif $1 = 'p' then
 
-EXECUTE format('create temp table tmp on commit drop as select %s, d.*  
+EXECUTE format('create temp table tmp on commit drop as select key, mark, d.*  
 from %s_v3_dna, rocks_csv_to_record(%s,%s)
 d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
 oav oid, kia int, kib int, kbb smallint, odb date, 
 obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
 obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
 oda timestamp, k2d smallint, ode timestamp, k2a smallint
-) where %s_v3_dna.key = %s',$3,$1,$2,$3,$1,$3);
+) where %s_v3_dna.key = %s and %s_v3_dna.mark = %s',$1,$2,$3,$1,$3,$1,$2);
 EXECUTE format('insert into %s_c0 select * from tmp',$1);
 
 end if;
