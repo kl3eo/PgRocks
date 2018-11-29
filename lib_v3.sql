@@ -37,7 +37,8 @@ EXECUTE format('drop table if exists %s_v3_dna', $1);
 
 if $2 = 1 then 
 EXECUTE format('create table %s_v3_dna (mark int, rev int, key bigint, ancestor bigint)', $1);
-EXECUTE format('alter table %s_v3_dna add constraint %s_v3_dna_unq unique (key,mark)', $1, $1);
+-- overkill: rocks_to_csv checks for dups in keys
+-- EXECUTE format('alter table %s_v3_dna add constraint %s_v3_dna_unq unique (key,mark)', $1, $1);
 end if;
   
 RETURN resultCount;
@@ -214,6 +215,7 @@ EXECUTE format('select cast(%s as text)',v) into vc;
 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values(%s,1,%s,%s)',TG_ARGV[0],TG_ARGV[1],v,v);
 NEW.key = v;
+NEW.mark = TG_ARGV[1];
 
 END IF;
 RETURN NEW;
