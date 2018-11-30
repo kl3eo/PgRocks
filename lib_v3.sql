@@ -5,8 +5,8 @@
 CREATE OR REPLACE FUNCTION _d_rocksdb3(text)
 RETURNS integer AS $$
 DECLARE 
-
 r int;
+
 BEGIN
 
 FOR r IN
@@ -27,7 +27,6 @@ END;$$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION _i_v3_dna(text, int)
 RETURNS integer AS $$
 DECLARE 
-
 resultCount integer := 0;
 
 BEGIN
@@ -37,9 +36,6 @@ EXECUTE format('drop table if exists %s_v3_dna', $1);
 
 if $2 = 1 then 
 EXECUTE format('create table %s_v3_dna (mark int2, rev int2, key bigint, ancestor bigint)', $1);
--- overkill: rocks_to_csv checks for dups in keys
--- EXECUTE format('alter table %s_v3_dna add constraint %s_v3_dna_unq unique (key,mark)', $1, $1);
-end if;
   
 RETURN resultCount;
 
@@ -54,26 +50,12 @@ CREATE OR REPLACE FUNCTION _e_v3_dna(text, int, int, int, text)
 RETURNS integer AS $$
 DECLARE 
 resultCount integer := 0;
--- table_exists bool;
 
 BEGIN
-
--- EXECUTE format('SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = ''public'' AND table_name = ''%s_new'')',$1) into table_exists;
-
--- if table_exists is false then
--- EXECUTE format('create unlogged table %s_new as select * from %s limit 0',$1,$1);
--- EXECUTE format('alter table %s_new add column my_%s_new_id bigserial',$1,$1);
--- EXECUTE format('insert into %s_new select * from %s',$1,$1);
--- EXECUTE format('alter table %s_new add primary key (my_%s_new_id)',$1,$1);
--- end if;
 
 EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s_new limit 0',$1);
 EXECUTE format('CREATE TEMP TABLE v3_dna_tmp (mark int2, rev int2, key bigint, ancestor bigint) on commit drop');
 
--- EXECUTE format('insert into tmp select * from %s limit %s offset %s',$1,$3,$4);
--- or even
--- EXECUTE format('WITH moved_rows AS ( SELECT * FROM %s_new WHERE my_%s_new_id  = ANY(ARRAY(SELECT my_%s_new_id FROM %s_new order by my_%s_new_id %s LIMIT %s offset %s)) ) insert into tmp select * from moved_rows',$1,$1,$1,$1,$1,$5,$3,$4);
--- faster?
 
 EXECUTE format('insert into tmp SELECT * FROM %s_new order by my_%s_new_id %s LIMIT %s offset %s',$1,$1,$5,$3,$4);
 EXECUTE format('alter table tmp drop column my_%s_new_id',$1);
@@ -110,23 +92,9 @@ if table_exists is false then
 
 if $1 = 'players' then
 
--- EXECUTE format('create unlogged table %s_c0 with oids as select key, d.*  
--- from %s_v3_dna, rocks_csv_to_record(%s,%s_v3_dna.key) 
--- d(name text, aka text, dob date, weight float, height int, last_seen timestamp
--- ) where %s_v3_dna.rev  > 0 and %s_v3_dna.mark = %s',$1,$1,$2,$1,$1,$1,$2);
-
 EXECUTE format('create table %s_c0 (key bigint, mark int2, name text, aka text, dob date, weight float, height int, last_seen timestamp) with oids',$1);
 
 elsif $1 = 'p' then
-
--- EXECUTE format('create unlogged table %s_c0 with oids as select key, d.*  
--- from %s_v3_dna, rocks_csv_to_record(%s,%s_v3_dna.key) 
--- d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
--- oav oid, kia int, kib int, kbb smallint, odb date, 
--- obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
--- obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
--- oda timestamp, k2d smallint, ode timestamp, k2a smallint
--- ) where %s_v3_dna.rev  > 0 and %s_v3_dna.mark = %s',$1,$1,$2,$1,$1,$1,$2);
 
 EXECUTE format('create table %s_c0 (key bigint, mark int2, occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
 oav oid, kia int, kib int, kbb smallint, odb date, 
@@ -188,9 +156,9 @@ IF (TG_OP = 'INSERT') THEN
 
 EXECUTE 'select rocks_get_node_number()' into v;
 
--- here we strongly depend on that key of the insert has been already formed correctly somewhere as:
+-- key of the insert has been already formed correctly somewhere as
 -- select cast( rocks_get_node_number()*10000000000000000+ EXTRACT(EPOCH FROM current_timestamp)*1000000 as bigint);
--- otherwise catch all sorts of error
+-- or catch error
 
 IF (floor(NEW.key/10000000000000000) = 0 or NEW.key IS NULL) THEN
 RAISE NOTICE 'BAD KEY(''%''): exiting',NEW.key;
@@ -204,12 +172,11 @@ drop table if exists tmp;
 CREATE TEMP TABLE tmp on commit drop as select NEW.*;
 ALTER TABLE tmp drop column key;
 ALTER TABLE tmp drop column mark;
--- we're ad hoc putting new rec into store=TG_ARGV[1]; we're free to chose one
+
 EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp',TG_ARGV[1]) into v;
 EXECUTE format('select rocks_close()');
 
 EXECUTE format('select cast(%s as text)',v) into vc;
--- payload := (SELECT TG_ARGV[1] || ',' || json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc,'mark',TG_ARGV[1]) );
  payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',1,'key',vc, 'ancestor',vc,'mark',TG_ARGV[1]) );
   perform pg_notify('v3_dna_insert', payload); 
 
@@ -244,6 +211,7 @@ perform pg_notify('v3_dna_update', payload);
 EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),NEW.key,NEW.mark);
 
 NEW.key = v;
+NEW.mark = mark_old;
 RETURN NEW;
 
 ELSIF (TG_OP = 'DELETE') THEN
@@ -276,7 +244,7 @@ END;$_ew_new_row$ LANGUAGE plpgsql;
 
 -----------------------------------------------------------------------------------------------------------------
 -- used by data rewind mechanism (see examples)
--- table_name$1, timestampin_past$2, num_stores$2
+-- table_name$1, timestampin_past$2, num_store$3
 -----------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _e_rewind_c0(text,timestamptz,int)
 RETURNS integer AS $$
@@ -386,7 +354,7 @@ END;$$ LANGUAGE plpgsql;
 
 --------------------------------------------------------------------------------------------------------------------
 -- wrapper for _e_checkout_c0; scans the v3_dna and checks out from the RocksDB stores related by 'mark' field
--- table_name$1, num_stores$2
+-- table_name$1, num_store$2
 --------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION _e_c0(text, int)
 returns integer AS $$
@@ -394,7 +362,7 @@ returns integer AS $$
 DECLARE 
 r int;
 resultCount integer := 0;
-chosen_mark int := 0;
+-- chosen_mark int := 0;
 
 BEGIN
 
@@ -409,7 +377,7 @@ FOR r IN EXECUTE format('SELECT distinct mark from %s_v3_dna order by mark', $1)
     END LOOP;
 -- end perl loop
 
-EXECUTE format('SELECT floor(random()*%s + 1)::int', $2) into chosen_mark;
+-- EXECUTE format('SELECT floor(random()*%s + 1)::int', $2) into chosen_mark;
 
 EXECUTE format('DROP TRIGGER IF EXISTS %s_c0_biud_v3 ON %s_c0',$1,$1);
 
@@ -417,7 +385,7 @@ EXECUTE format('CREATE TRIGGER %s_c0_biud_v3
 BEFORE INSERT OR UPDATE OR DELETE 
 ON %s_c0
 FOR EACH ROW
-EXECUTE PROCEDURE _ew_new_row(''%s'',%s);',$1,$1,$1,chosen_mark);
+EXECUTE PROCEDURE _ew_new_row(''%s'',%s);',$1,$1,$1,$2);
 
 RETURN resultCount;
 
