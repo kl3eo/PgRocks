@@ -28,12 +28,12 @@ function update_table_in_joint(name, from, tableName, jsonRow) {
   var client = _joints[name].client;
   var row = JSON.parse(jsonRow);
   
-  client.query('UPDATE ' + tableName + '_v3_dna SET rev = ($1) WHERE key = ($2)'
-    , [row.rev,row.key])
+  client.query('UPDATE ' + tableName + '_v3_dna SET rev = ($1) WHERE key = ($2) and mark = ($3)'
+    , [row.rev,row.key,row.mark])
     .then(function()     { console.log(name + ': client got update from ' + from + ', key = ' + row.key); })
     .catch(function(err) { console.error(name + ': client COULD NOT get update', '\nrow = ' + jsonRow, err.stack); });
-  client.query('DELETE from ' + tableName + '_c0 WHERE key = ($1)'
-    , [row.key])
+  client.query('DELETE from ' + tableName + '_c0 WHERE key = ($1) and mark = ($2)'
+    , [row.key,row.mark])
     .then(function()     { console.log(name + ': client got cache deleted from ' + from + ', key = ' + row.key); })
     .catch(function(err) { console.error(name + ': client COULD NOT get cache deleted', '\nrow = ' + jsonRow, err.stack); });
 

@@ -4,9 +4,9 @@ use strict;
 #!!! --DO NOT RUN PSQL WHILE RUNNING THIS SCRIPT - OR IT WILL NOT END-- !!!
 
 my $num_args = $#ARGV + 1;
-if ($num_args != 2) {
-    #print "\nUsage: '$0 <table> <number of ROWS> <(re)create clone = 1/ use old clone = 0>'\n";
-    print "\nUsage: '$0 <table> <number of ROWS>'\n";
+if ($num_args != 3) {
+
+    print "\nUsage: '$0 <table> <number of ROWS> [option: <initial RocksDB store number, default 1>]'\n";
     exit;
 }
 
@@ -14,11 +14,13 @@ system("echo ==== >> log && date >> log && echo 'Starting script' >> log && echo
 
 my $tab = $ARGV[0];
 my $nrows =$ARGV[1];
-my $flag =$ARGV[2];
+my $ini = defined($ARGV[2]) && int($ARGV[2]) > 0 ? int($ARGV[2])-1 : 0;
 
 my $N = 16; #how many parallel streams, must be even number
 my $sum = 0;
 my $lim = 0;
+
+my $U = $ini + $N;
 
 #coeffs taken from measuring input of 102821244 rows with LIMIT 6500000, OFFSET  = LIMIT*n, i.e. equidistant
 #in order to get ~ equal numbers of rows in shards, we need these weights --ash
@@ -36,9 +38,7 @@ foreach my $w (@coeff ){$scoeff += $w;}
 #recreate v3_dna for parent tab
 my $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "select _i_v3_dna('$tab',1)" people > .err0.log 2>&1`;
 
-#recreate child tab if flag
 
-#if ($flag) {
 system("echo ==== >> log && date >> log && echo '(Re)creating clone $tab\_new' >> log && echo ==== && date && echo '(Re)creating clone $tab\_new'");
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "drop table if exists $tab\_new" people >> .err0.log 2>&1`;
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "create unlogged table $tab\_new as select * from $tab limit 0" people >> .err0.log 2>&1`;
@@ -47,18 +47,18 @@ system("echo ==== >> log && date >> log && echo 'Copying clone $tab\_new from pa
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "insert into $tab\_new select * from $tab" people >> .err0.log 2>&1`;
 system("echo ==== >> log && date >> log && echo 'Indexing clone $tab\_new' >> log && echo ==== && date && echo 'Indexing clone $tab\_new'");
 $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "alter table $tab\_new add primary key (my_$tab\_new_id)" people >> .err0.log 2>&1`;
-#}
 
-my $nru = ($N/2) - 1;  
+
+my $nru = $ini + ($N/2) - 1;  
 
 system("echo ==== >> log && date >> log && echo 'Creating RocksDB $N stores' >> log && echo ==== && date && echo 'Creating RocksDB $N stores'");
 
-for (my $i = 0; $i <$nru; $i++) {
+for (my $i = $ini; $i <$nru; $i++) {
 
 	$lim = int( 0.5 * $nrows * ($coeff[$i]/$scoeff));
 	
 	my $j = $i + 1;
-	my $k = $N - $i;
+	my $k = $U - $i;
 
 	my $c = `/usr/local/pgsql/bin/psql -c "\\timing" -c "explain analyze select _e_v3_dna('$tab',$j, $lim,$sum,'asc')" people > .err$j.log 2>&1 &`;
 print "Here store is $j, rows is $lim, offset is $sum, order is asc!\n";	
@@ -73,8 +73,8 @@ print "Here store is $k, rows is $lim, offset is $sum, order is desc!\n";
 
 #start the last two runners
 
-my $k = $N - $nru;
-my $j = $N/2;
+my $k = $U - $nru;
+my $j = $N/2 + $ini;
 
 $lim = int( 0.5 * $nrows * ($coeff[$j-1]/$scoeff));
 

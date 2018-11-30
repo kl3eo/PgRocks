@@ -36,7 +36,7 @@ BEGIN
 EXECUTE format('drop table if exists %s_v3_dna', $1);
 
 if $2 = 1 then 
-EXECUTE format('create table %s_v3_dna (mark int, rev int, key bigint, ancestor bigint)', $1);
+EXECUTE format('create table %s_v3_dna (mark int2, rev int2, key bigint, ancestor bigint)', $1);
 -- overkill: rocks_to_csv checks for dups in keys
 -- EXECUTE format('alter table %s_v3_dna add constraint %s_v3_dna_unq unique (key,mark)', $1, $1);
 end if;
@@ -54,7 +54,7 @@ CREATE OR REPLACE FUNCTION _e_v3_dna(text, int, int, int, text)
 RETURNS integer AS $$
 DECLARE 
 resultCount integer := 0;
-table_exists bool;
+-- table_exists bool;
 
 BEGIN
 
@@ -68,7 +68,7 @@ BEGIN
 -- end if;
 
 EXECUTE format('CREATE TEMP TABLE tmp on commit drop as select * from %s_new limit 0',$1);
-EXECUTE format('CREATE TEMP TABLE v3_dna_tmp (mark int, rev int, key bigint, ancestor bigint) on commit drop');
+EXECUTE format('CREATE TEMP TABLE v3_dna_tmp (mark int2, rev int2, key bigint, ancestor bigint) on commit drop');
 
 -- EXECUTE format('insert into tmp select * from %s limit %s offset %s',$1,$3,$4);
 -- or even
@@ -238,7 +238,7 @@ payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',rev_old+1,'key',vc, 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values (%s,%s,%s,%s)',TG_ARGV[0],mark_old,rev_old+1,v,ancs);
 
 EXECUTE format('select cast(%s as text)',NEW.key) into vc;
-payload := (SELECT TG_ARGV[0] || ',' || json_build_object('rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
+payload := (SELECT TG_ARGV[0] || ',' || json_build_object('mark',mark_old,'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
 perform pg_notify('v3_dna_update', payload); 
 
 EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),NEW.key,NEW.mark);
@@ -261,7 +261,7 @@ EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values(%s,0,%s,
 
 EXECUTE format('select cast(%s as text)',OLD.key) into vc;
 
-payload := (SELECT TG_ARGV[0] || ',' || json_build_object('rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
+payload := (SELECT TG_ARGV[0] || ',' || json_build_object('mark',mark_old,'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
 perform pg_notify('v3_dna_update', payload); 
 
 EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),OLD.key,OLD.mark);
@@ -273,6 +273,71 @@ RETURN OLD;
 END IF;
 
 END;$_ew_new_row$ LANGUAGE plpgsql;
+
+-----------------------------------------------------------------------------------------------------------------
+-- used by data rewind mechanism (see examples)
+-- table_name$1, timestampin_past$2, num_stores$2
+-----------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _e_rewind_c0(text,timestamptz,int)
+RETURNS integer AS $$
+
+DECLARE
+r int;
+resultCount integer := 0;
+
+BEGIN
+
+if ($1 = 'players' or $1 = 'p') then
+
+else 
+RETURN -1;
+end if;
+
+EXECUTE format('truncate %s_c0',$1);
+EXECUTE format('DROP TRIGGER IF EXISTS %s_c0_biud_v3 ON %s_c0',$1,$1);
+
+EXECUTE format('create temp table tmp on commit drop as select max(abs(rev)) as max, min(abs(rev)) as min, ancestor from %s_v3_dna where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz ''%s'')*1000000 group by ancestor',$1,$2);
+
+FOR r IN EXECUTE format('SELECT distinct mark from %s_v3_dna order by mark', $1)
+    LOOP
+    
+    	if $1 = 'players' then
+
+EXECUTE format('insert into %s_c0 select key, mark, d.* from %s_v3_dna, tmp, rocks_csv_to_record(%s,%s_v3_dna.key) 
+d(name text, aka text, dob date, weight float, height int, last_seen timestamp
+) where abs(%s_v3_dna.rev) = tmp.max and tmp.min != 0 and %s_v3_dna.ancestor = tmp.ancestor',$1,$1,r,$1,$1,$1);
+
+	elsif $1 = 'p' then
+
+EXECUTE format('insert into %s_c0 select key, mark, d.* from %s_v3_dna, tmp, rocks_csv_to_record(%s,%s_v3_dna.key) 
+d(occ bigint, goc bigint, kbd smallint, otc text, kba smallint, otv text, 
+oav oid, kia int, kib int, kbb smallint, odb date, 
+obb bool, obc bool, ona int, kic int, obd bool, odc timestamp, otn text,
+obf bool, obg bool, kbc smallint, obh bool, k2c smallint, odd timestamp, k2b smallint,
+oda timestamp, k2d smallint, ode timestamp, k2a smallint
+) where abs(%s_v3_dna.rev) = tmp.max and tmp.min != 0 and %s_v3_dna.ancestor = tmp.ancestor',$1,$1,r,$1,$1,$1);
+
+	end if;
+
+	resultCount = resultCount + 1;
+	
+    END LOOP;
+
+  
+EXECUTE format('select rocks_close()');
+
+EXECUTE format('DROP TRIGGER IF EXISTS %s_c0_biud_v3 ON %s_c0',$1,$1);
+
+EXECUTE format('CREATE TRIGGER %s_c0_biud_v3
+BEFORE INSERT OR UPDATE OR DELETE 
+ON %s_c0
+FOR EACH ROW
+EXECUTE PROCEDURE _ew_new_row(''%s'',%s);',$1,$1,$1,$3);
+
+
+RETURN 0;
+
+END;$$ LANGUAGE plpgsql;
 
 -----------------------------------------------------------------------------------------------------------------
 -- used to insert external data to local cache
@@ -293,7 +358,7 @@ drop table if exists tmp;
 
 if $1 = 'players' then
 
-EXECUTE format('create temp table tmp on commit drop as select key, mark ,d.*  
+EXECUTE format('create temp table tmp on commit drop as select key, mark, d.*  
 from %s_v3_dna, rocks_csv_to_record(%s,%s)
 d(name text, aka text, dob date, weight float, height int, last_seen timestamp
 ) where %s_v3_dna.key = %s and %s_v3_dna.mark = %s',$1,$2,$3,$1,$3,$1,$2);

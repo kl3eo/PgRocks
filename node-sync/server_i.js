@@ -49,9 +49,6 @@ function setup_notification(name) {
   client.on('notification', function(msg) {
     console.log(name + ': client got notification on \'' + msg.channel + '\'');
 
-    //var sepPos = msg.payload.indexOf(',');
-    //var tableNum = msg.payload.substr(0, sepPos);
-    //var jsonRow = msg.payload.substr(sepPos + 1);
     var jsonRow = msg.payload;
 	
     for (var jointName in _joints) {

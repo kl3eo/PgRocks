@@ -1,0 +1,418 @@
+WRITING (421sec)
+-------
+
+[postgres@alex6 db_v2]$ ./writing_16.pl p 102821244 && sleep 10 && echo 'Compaction done' 2>&1 &
+[1] 396445
+[postgres@alex6 db_v2]$ ====
+Fri Nov 30 11:30:20 MSK 2018
+Starting script
+====
+Fri Nov 30 11:30:20 MSK 2018
+(Re)creating clone p_new
+====
+Fri Nov 30 11:30:20 MSK 2018
+Copying clone p_new from parent p
+====
+Fri Nov 30 11:32:53 MSK 2018
+Indexing clone p_new
+====
+Fri Nov 30 11:33:26 MSK 2018
+Creating RocksDB 16 stores
+Here store is 1, rows is 7730920, offset is 0, order is asc!
+Here store is 16, rows is 7730920, offset is 0, order is desc!
+Here store is 2, rows is 7498992, offset is 7730920, order is asc!
+Here store is 15, rows is 7498992, offset is 7730920, order is desc!
+Here store is 3, rows is 6957828, offset is 15229912, order is asc!
+Here store is 14, rows is 6957828, offset is 15229912, order is desc!
+Here store is 4, rows is 6493973, offset is 22187740, order is asc!
+Here store is 13, rows is 6493973, offset is 22187740, order is desc!
+Here store is 5, rows is 6030118, offset is 28681713, order is asc!
+Here store is 12, rows is 6030118, offset is 28681713, order is desc!
+Here store is 6, rows is 5720881, offset is 34711831, order is asc!
+Here store is 11, rows is 5720881, offset is 34711831, order is desc!
+Here store is 7, rows is 5566262, offset is 40432712, order is asc!
+Here store is 10, rows is 5566262, offset is 40432712, order is desc!
+Here store is 9, rows is 5411644, offset is 45998974, order is desc!
+Here store is 8, rows is 5411652, offset is 45998974, order is asc!
+
+[postgres@alex6 db_v2]$ .. waiting to finish
+.. waiting to finish
+.. waiting to finish
+Finished all runners
+====
+Fri Nov 30 11:35:49 MSK 2018
+Creating index on v3_dna table
+====
+Fri Nov 30 11:37:17 MSK 2018
+Dropping clone p_new
+====
+Fri Nov 30 11:37:21 MSK 2018
+Finished
+Compaction done
+
+cat .err* | grep "Execution Time" | awk {'print $3'}
+141681.022
+141677.996
+140251.547
+137588.088
+135571.004
+131898.211
+114050.921
+130328.338
+141681.827
+141701.119
+139775.244
+137301.051
+133720.942
+129656.348
+133962.601
+130763.466
+
+[postgres@alex6 db_v2]$ iostat -m
+Linux 3.10.0-957.el7.x86_64 (alex6.example.com) 	11/30/2018 	_x86_64_	(40 CPU)
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.64    0.00    0.14    0.15    0.00   99.07
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1         139.14         0.68         9.50     689527    9594659
+sda               2.27         0.01         2.54       8606    2562083
+
+
+[postgres@alex6 db_v2]$ du /opt/nvme/pgrocks/
+613732	/opt/nvme/pgrocks/rocksdb_7
+825876	/opt/nvme/pgrocks/rocksdb_15
+762876	/opt/nvme/pgrocks/rocksdb_14
+633520	/opt/nvme/pgrocks/rocksdb_6
+703224	/opt/nvme/pgrocks/rocksdb_13
+714092	/opt/nvme/pgrocks/rocksdb_4
+847576	/opt/nvme/pgrocks/rocksdb_16
+656640	/opt/nvme/pgrocks/rocksdb_5
+593552	/opt/nvme/pgrocks/rocksdb_8
+633760	/opt/nvme/pgrocks/rocksdb_11
+817200	/opt/nvme/pgrocks/rocksdb_2
+758168	/opt/nvme/pgrocks/rocksdb_3
+658308	/opt/nvme/pgrocks/rocksdb_12
+779600	/opt/nvme/pgrocks/rocksdb_1
+586036	/opt/nvme/pgrocks/rocksdb_9
+613624	/opt/nvme/pgrocks/rocksdb_10
+11197788	/opt/nvme/pgrocks/
+
+
+READING (283sec)
+-------
+
+[postgres@alex6 db_v2]$ ./reading_16.pl p 1 && ./reading_16.pl p 0 9 2>&1 &
+[1] 398811
+[postgres@alex6 db_v2]$ ====
+Fri Nov 30 11:45:43 MSK 2018
+Starting script
+====
+Fri Nov 30 11:45:43 MSK 2018
+Dropping old c0 cache (if exists) p_c0
+====
+Fri Nov 30 11:45:43 MSK 2018
+Creating empty p_c0
+====
+Fri Nov 30 11:45:43 MSK 2018
+Starting parallel readers from 8 RocksDB stores into p_c0
+
+[postgres@alex6 db_v2]$ .. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+.. waiting to finish
+Finished all runners
+====
+Fri Nov 30 11:47:56 MSK 2018
+Creating trigger p_c0_biud_v3
+====
+Fri Nov 30 11:47:56 MSK 2018
+Finished
+====
+Fri Nov 30 11:47:56 MSK 2018
+Starting script
+====
+Fri Nov 30 11:47:56 MSK 2018
+Starting parallel readers from 8 RocksDB stores into p_c0
+Finished all runners
+====
+Fri Nov 30 11:50:25 MSK 2018
+Creating trigger p_c0_biud_v3
+====
+Fri Nov 30 11:50:26 MSK 2018
+Finished
+
+REWIND
+----
+
+TEST TABLE = PLAYERS
+
+ 1033  Nov 30 13:37:21 ./writing_16.pl players 10 25
+ 1034  Nov 30 13:37:42 psql people
+ 1035  Nov 30 13:38:23 du /opt/nvme/pgrocks/
+
+156	/opt/nvme/pgrocks/rocksdb_32
+
+ 1037  Nov 30 13:59:14 vi ./reading_16.pl (N = 2)
+ 1038  Nov 30 14:01:34 ./reading_16.pl players 1 32 
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+ 11543574242226252 |   32 | Mike Bryan     | Joker     | 1984-08-21 |     80 |    180 | 2018-04-08 06:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+(10 rows)
+
+people=# select '0x' || LPAD(to_hex(key), 16, '0') as hex_key from players_v3_dna;
+      hex_key       
+--------------------
+ 0x002902d1d2256ef9
+ 0x002902d1d225702d
+ 0x002902d1d2257038
+ 0x002902d1d225703e
+ 0x002902d1d2257042
+ 0x002902d1d2257047
+ 0x002902d1d225704c
+ 0x002902d1d2257050
+ 0x002902d1d2257055
+ 0x002902d1d2257059
+(10 rows)
+
+[postgres@alex6 db_v2]$ ldb --db=/opt/nvme/pgrocks/rocksdb_32 scan --key_hex
+0x002902D1D2256EF9 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|
+0x002902D1D225702D : Mike Palmer|Hippy|"1988-12-06"|75.5|184|573142800000000|
+0x002902D1D2257038 : Dorothy Brown|Miss D|"1992-07-12"|64.3|172|574421100000000|
+0x002902D1D225703E : Linda Chambers|Jamaica|"1987-03-10"|57.7|180|575906400000000|
+0x002902D1D2257042 : Claude Moulin|French|"1944-10-17"|68.1|170|558793800000000|
+0x002902D1D2257047 : Petra Che|Baby|"1989-05-30"|62.3|180|565701600000000|
+0x002902D1D225704C : Mike Bryan|Joker|"1984-08-21"|80|180|576483900000000|
+0x002902D1D2257050 : Alicia Silver|Checkmate|"1995-09-02"|57.8|168|548931900000000|
+0x002902D1D2257055 : Fernan Ozy|Beast|"1967-12-12"|92.7|177|567965400000000|
+0x002902D1D2257059 : Ivan Lebed|Russo|"1959-01-10"|77.4|180|575735400000000|
+
+
+update players_c0 set weight=80.2 where name = 'Mike Bryan';
+
+update players_c0 set height=181 where name = 'Mike Bryan';
+
+people=# select * from players_v3_dna;
+ mark | rev |        key        |     ancestor      
+------+-----+-------------------+-------------------
+   32 |   1 | 11543574242225913 | 11543574242225913
+   32 |   1 | 11543574242226221 | 11543574242226221
+   32 |   1 | 11543574242226232 | 11543574242226232
+   32 |   1 | 11543574242226238 | 11543574242226238
+   32 |   1 | 11543574242226242 | 11543574242226242
+   32 |   1 | 11543574242226247 | 11543574242226247
+   32 |   1 | 11543574242226256 | 11543574242226256
+   32 |   1 | 11543574242226261 | 11543574242226261
+   32 |   1 | 11543574242226265 | 11543574242226265
+   32 |  -1 | 11543574242226252 | 11543574242226252
+   32 |   3 | 11543576106199054 | 11543574242226252
+   32 |  -2 | 11543576057691553 | 11543574242226252
+
+people=# delete from players_c0 where name = 'Mike Bryan';
+DELETE 1
+people=# \q
+[postgres@alex6 db_v2]$ ldb --db=/opt/nvme/pgrocks/rocksdb_32 scan --key_hex
+0x002902D1D2256EF9 : Peter Stevens|Boss|"1956-06-30"|85.4|169|562267800000000|
+0x002902D1D225702D : Mike Palmer|Hippy|"1988-12-06"|75.5|184|573142800000000|
+0x002902D1D2257038 : Dorothy Brown|Miss D|"1992-07-12"|64.3|172|574421100000000|
+0x002902D1D225703E : Linda Chambers|Jamaica|"1987-03-10"|57.7|180|575906400000000|
+0x002902D1D2257042 : Claude Moulin|French|"1944-10-17"|68.1|170|558793800000000|
+0x002902D1D2257047 : Petra Che|Baby|"1989-05-30"|62.3|180|565701600000000|
+0x002902D1D225704C : Mike Bryan|Joker|"1984-08-21"|80|180|576483900000000|
+0x002902D1D2257050 : Alicia Silver|Checkmate|"1995-09-02"|57.8|168|548931900000000|
+0x002902D1D2257055 : Fernan Ozy|Beast|"1967-12-12"|92.7|177|567965400000000|
+0x002902D1D2257059 : Ivan Lebed|Russo|"1959-01-10"|77.4|180|575735400000000|
+0x002902D23E5B3DA1 : Mike Bryan|Joker|"1984-08-21"|80.2|180|576483900000000|
+0x002902D2413F680E : Mike Bryan|Joker|"1984-08-21"|80.2|181|576483900000000|
+
+[postgres@alex6 db_v2]$ psql people
+psql (11.1)
+Type "help" for help.
+
+people=# select * from players_v3_dna;
+ mark | rev |        key        |     ancestor      
+------+-----+-------------------+-------------------
+   32 |   1 | 11543574242225913 | 11543574242225913
+   32 |   1 | 11543574242226221 | 11543574242226221
+   32 |   1 | 11543574242226232 | 11543574242226232
+   32 |   1 | 11543574242226238 | 11543574242226238
+   32 |   1 | 11543574242226242 | 11543574242226242
+   32 |   1 | 11543574242226247 | 11543574242226247
+   32 |   1 | 11543574242226256 | 11543574242226256
+   32 |   1 | 11543574242226261 | 11543574242226261
+   32 |   1 | 11543574242226265 | 11543574242226265
+   32 |  -1 | 11543574242226252 | 11543574242226252
+   32 |  -2 | 11543576057691553 | 11543574242226252
+   32 |   0 | 11543576175783660 | 11543574242226252
+   32 |  -3 | 11543576106199054 | 11543574242226252
+(13 rows)
+
+people=# select to_timestamp(1543576057.691553);
+         to_timestamp          
+-------------------------------
+ 2018-11-30 14:07:37.691553+03
+(1 row)
+
+
+people=# select to_timestamp(1543576106.199054);
+         to_timestamp          
+-------------------------------
+ 2018-11-30 14:08:26.199054+03
+(1 row)
+
+people=# select max(abs(rev)),min(abs(rev)),ancestor from players_v3_dna where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz '2018-11-30 14:07:00+03')*1000000 group by ancestor;
+ max | min |     ancestor      
+-----+-----+-------------------
+   1 |   1 | 11543574242226242
+   1 |   1 | 11543574242226232
+   1 |   1 | 11543574242226256
+   1 |   1 | 11543574242226221
+   1 |   1 | 11543574242226261
+   1 |   1 | 11543574242226238
+   1 |   1 | 11543574242225913
+   1 |   1 | 11543574242226252
+   1 |   1 | 11543574242226265
+   1 |   1 | 11543574242226247
+(10 rows)
+
+people=# select max(abs(rev)),min(abs(rev)),ancestor from players_v3_dna where right(key::text,16)::bigint < EXTRACT(EPOCH FROM timestamptz '2018-11-30 14:08:30+03')*1000000 group by ancestor;
+ max | min |     ancestor      
+-----+-----+-------------------
+   1 |   1 | 11543574242226242
+   1 |   1 | 11543574242226232
+   1 |   1 | 11543574242226256
+   1 |   1 | 11543574242226221
+   1 |   1 | 11543574242226261
+   1 |   1 | 11543574242226238
+   1 |   1 | 11543574242225913
+   3 |   1 | 11543574242226252
+   1 |   1 | 11543574242226265
+   1 |   1 | 11543574242226247
+(10 rows)
+
+people=# select _e_rewind_c0('players','2018-11-30 14:07:00+03',32);
+NOTICE:  trigger "players_c0_biud_v3" for relation "players_c0" does not exist, skipping
+ _e_rewind_c0 
+--------------
+            0
+(1 row)
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543574242226252 |   32 | Mike Bryan     | Joker     | 1984-08-21 |     80 |    180 | 2018-04-08 06:25:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+(10 rows)
+
+people=# select _e_rewind_c0('players','2018-11-30 14:08:00+03',32);
+NOTICE:  trigger "players_c0_biud_v3" for relation "players_c0" does not exist, skipping
+ _e_rewind_c0 
+--------------
+            0
+(1 row)
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543576057691553 |   32 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    180 | 2018-04-08 06:25:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+(10 rows)
+
+people=# select _e_rewind_c0('players','2018-11-30 14:09:00+03',32);
+NOTICE:  trigger "players_c0_biud_v3" for relation "players_c0" does not exist, skipping
+ _e_rewind_c0 
+--------------
+            0
+(1 row)
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543576106199054 |   32 | Mike Bryan     | Joker     | 1984-08-21 |   80.2 |    181 | 2018-04-08 06:25:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+(10 rows)
+
+people=# select _e_rewind_c0('players','2018-11-30 14:10:00+03',32);
+NOTICE:  trigger "players_c0_biud_v3" for relation "players_c0" does not exist, skipping
+ _e_rewind_c0 
+--------------
+            0
+(1 row)
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+(9 rows)
+
+people=# select _e_rewind_c0('players',now(),32);
+NOTICE:  trigger "players_c0_biud_v3" for relation "players_c0" does not exist, skipping
+ _e_rewind_c0 
+--------------
+            0
+(1 row)
+
+people=# select * from players_c0;
+        key        | mark |      name      |    aka    |    dob     | weight | height |      last_seen      
+-------------------+------+----------------+-----------+------------+--------+--------+---------------------
+ 11543574242226242 |   32 | Claude Moulin  | French    | 1944-10-17 |   68.1 |    170 | 2017-09-15 12:30:00
+ 11543574242226232 |   32 | Dorothy Brown  | Miss D    | 1992-07-12 |   64.3 |    172 | 2018-03-15 09:25:00
+ 11543574242226256 |   32 | Alicia Silver  | Checkmate | 1995-09-02 |   57.8 |    168 | 2017-05-24 09:05:00
+ 11543574242226221 |   32 | Mike Palmer    | Hippy     | 1988-12-06 |   75.5 |    184 | 2018-02-28 14:20:00
+ 11543574242226261 |   32 | Fernan Ozy     | Beast     | 1967-12-12 |   92.7 |    177 | 2017-12-30 16:10:00
+ 11543574242226238 |   32 | Linda Chambers | Jamaica   | 1987-03-10 |   57.7 |    180 | 2018-04-01 14:00:00
+ 11543574242225913 |   32 | Peter Stevens  | Boss      | 1956-06-30 |   85.4 |    169 | 2017-10-25 17:30:00
+ 11543574242226265 |   32 | Ivan Lebed     | Russo     | 1959-01-10 |   77.4 |    180 | 2018-03-30 14:30:00
+ 11543574242226247 |   32 | Petra Che      | Baby      | 1989-05-30 |   62.3 |    180 | 2017-12-04 11:20:00
+(9 rows)
+
+people=# 
+
+
