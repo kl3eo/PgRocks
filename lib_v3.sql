@@ -200,6 +200,12 @@ if (mark_old  = 0 or mark_old is null) then
 	EXECUTE format('select 1') into mark_old;
 end if;
 
+EXECUTE format('select cast(%s as text)',NEW.key) into vc;
+payload := (SELECT TG_ARGV[0] || ',' || json_build_object('mark',mark_old,'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
+perform pg_notify('v3_dna_update', payload); 
+
+EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),NEW.key,NEW.mark);
+
 EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp', mark_old) into v;
 EXECUTE format('select rocks_close()');
 
@@ -208,12 +214,6 @@ payload := (SELECT json_build_object('tab',TG_ARGV[0],'rev',rev_old+1,'key',vc, 
   perform pg_notify('v3_dna_insert', payload);
 
 EXECUTE format('insert into %s_v3_dna (mark, rev, key, ancestor) values (%s,%s,%s,%s)',TG_ARGV[0],mark_old,rev_old+1,v,ancs);
-
-EXECUTE format('select cast(%s as text)',NEW.key) into vc;
-payload := (SELECT TG_ARGV[0] || ',' || json_build_object('mark',mark_old,'rev',rev_old*(-1),'key',vc,'ancestor', ancs) );
-perform pg_notify('v3_dna_update', payload); 
-
-EXECUTE format('update %s_v3_dna set rev = %s where key = %s and mark = %s',TG_ARGV[0],rev_old*(-1),NEW.key,NEW.mark);
 
 NEW.key = v;
 NEW.mark = mark_old;
