@@ -34,9 +34,10 @@ BEGIN
 
 EXECUTE format('drop table if exists %s_v3_dna', $1);
 
-if $2 = 1 then 
+if ($2 = 1) then 
 EXECUTE format('create table %s_v3_dna (mark int2, rev int2, key bigint, ancestor bigint)', $1);
-  
+end if;
+
 RETURN resultCount;
 
 END;$$ LANGUAGE plpgsql;
@@ -194,6 +195,10 @@ ALTER TABLE tmp drop column key;
 ALTER TABLE tmp drop column mark;
 
 EXECUTE format('select mark, rev, ancestor::text from %s_v3_dna where key = %s and mark = %s',TG_ARGV[0],NEW.key,NEW.mark) into mark_old, rev_old, ancs ;
+
+if (mark_old  = 0 or mark_old is null) then 
+	EXECUTE format('select 1') into mark_old;
+end if;
 
 EXECUTE format('select row_to_csv_rocks(%s,tmp) from tmp', mark_old) into v;
 EXECUTE format('select rocks_close()');
