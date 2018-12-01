@@ -94,6 +94,7 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 	char name[128];
 	char *err = 0;
 	int cpus = -1;
+	int counter = 100;
 
 	if (rocksdb && rocksdb_num == db_num) {
 		return;
@@ -137,12 +138,21 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 
 	rocksdb_num = db_num;
 	_rocksdb_name(db_num, name);
-	rocksdb = rocksdb_open(rocksdb_options, name, &err);
-	if (err != NULL) {
-		ereport(ERROR,
-				(errcode(ERRCODE_NO_DATA),
-				errmsg("[rocksdb], open error: %s", err)));
+	
+        rocksdb = rocksdb_open(rocksdb_options, name, &err);
+
+	while (err != NULL && counter  > 0) {
+        	err = NULL;
+        	usleep(5000);
+        	rocksdb = rocksdb_open(rocksdb_options, name, &err);
+        	counter--;
 	}
+	
+        if (err != NULL) {
+                ereport(ERROR,
+                                (errcode(ERRCODE_NO_DATA),
+                                errmsg("[rocksdb], open error: %s", err)));
+        }
 }
 
 void _rocksdb_close()
