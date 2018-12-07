@@ -68,14 +68,17 @@ rocksdb_t *rocksdb = 0;
 rocksdb_options_t *rocksdb_options = 0;
 rocksdb_writeoptions_t *writeoptions = 0;
 rocksdb_readoptions_t *readoptions = 0;
+//rocksdb_fifo_compaction_options_t *fifooptions = 0;
 rocksdb_writebatch_t *writebatch = 0;
 int writebatch_records = 0;
-const char rocksdbpath[] = "/tmp/rocksdb";
+const char rocksdbpath[] = "/opt/nvme/pgrocks/rocksdb";
 
 size_t rocks_value_buf_size = 0;
 char * rocks_value_buf = NULL; // BTW, it's OK that it's never going to be freed
 uint64_t rocks_prev_key = 0;   // to compare a new key and the prev one to prevent a key repetition
 
+extern void _rocksdb_name(int, char*);
+extern void _rocksdb_close();
 
 void _uint64ToChar(uint64_t num, char key[])
 {
@@ -94,7 +97,7 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 	char name[128];
 	char *err = 0;
 	int cpus = -1;
-	int counter = 100;
+	int counter = 1000;
 
 	if (rocksdb && rocksdb_num == db_num) {
 		return;
@@ -116,15 +119,22 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 	rocksdb_options_increase_parallelism(rocksdb_options, (int)(cpus));
 	rocksdb_options_optimize_level_style_compaction(rocksdb_options, 0);
 	rocksdb_options_set_create_if_missing(rocksdb_options, createIfMissing ? 1 : 0);
-  	
-	// add code
-	rocksdb_options_set_compression(rocksdb_options, 0);
-	
-	// tune these for your machine's RAM
-    rocksdb_options_set_write_buffer_size(rocksdb_options, 1024L * 1024 * 16); // 1GB
-    rocksdb_options_set_max_write_buffer_number(rocksdb_options, 32);
-    rocksdb_options_set_target_file_size_base(rocksdb_options, 67108864 * 16); // 1GB
-    rocksdb_options_set_max_open_files(rocksdb_options, 100);
+
+
+// add code
+rocksdb_options_set_compression(rocksdb_options, 0);
+
+rocksdb_options_set_write_buffer_size(rocksdb_options, 64 << 20); // 64MB
+rocksdb_options_set_max_open_files(rocksdb_options, 300);
+
+rocksdb_options_set_num_levels(rocksdb_options,1);
+//rocksdb_options_set_level0_file_num_compaction_trigger(rocksdb_options,2);
+//rocksdb_options_set_level0_stop_writes_trigger(rocksdb_options,36);
+//rocksdb_options_set_level0_slowdown_writes_trigger(rocksdb_options,20);
+rocksdb_options_set_keep_log_file_num(rocksdb_options,2); 
+rocksdb_options_set_allow_concurrent_memtable_write(rocksdb_options, 1);	
+rocksdb_options_set_min_write_buffer_number_to_merge(rocksdb_options,1);
+rocksdb_options_set_compaction_style(rocksdb_options,1);
 
 	writeoptions = rocksdb_writeoptions_create();
 
@@ -138,21 +148,31 @@ void _rocksdb_open(int db_num, bool createIfMissing)
 
 	rocksdb_num = db_num;
 	_rocksdb_name(db_num, name);
-	
-        rocksdb = rocksdb_open(rocksdb_options, name, &err);
 
-	while (err != NULL && counter  > 0) {
-        	err = NULL;
-        	usleep(5000);
-        	rocksdb = rocksdb_open(rocksdb_options, name, &err);
-        	counter--;
-	}
+	rocksdb = rocksdb_open(rocksdb_options, name, &err);
 	
-        if (err != NULL) {
-                ereport(ERROR,
-                                (errcode(ERRCODE_NO_DATA),
-                                errmsg("[rocksdb], open error: %s", err)));
-        }
+while (err != NULL && counter  > 0) {
+	err = NULL;
+	usleep(10000);
+	rocksdb = rocksdb_open(rocksdb_options, name, &err);
+	counter--;
+}	
+	if (err != NULL) {
+		ereport(ERROR,
+				(errcode(ERRCODE_NO_DATA),
+				errmsg("[rocksdb], open error: %s", err)));
+	} else {
+		
+		FILE	   *fpidfile = fopen("/tmp/report", "a+");
+
+		if (fpidfile)
+		{	
+			fprintf(fpidfile, "%d\n", 1000-counter);
+			fclose(fpidfile);
+			
+
+		}
+	}
 }
 
 void _rocksdb_close()
@@ -170,6 +190,7 @@ void _rocksdb_close()
 	}
 
 	if (writebatch) rocksdb_writebatch_destroy(writebatch);
+	//if (fifooptions) rocksdb_fifo_compaction_options_destroy(fifooptions);
 	if (writeoptions) rocksdb_writeoptions_destroy(writeoptions);
 	if (readoptions) rocksdb_readoptions_destroy(readoptions);
 	if (rocksdb_options) rocksdb_options_destroy(rocksdb_options);
